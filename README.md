@@ -28,3 +28,19 @@ Loggers made for monitoring and logging signatures corresponding to Mitre Attack
 | **Domain Detection**            | Matches domain keywords in command lines or network traffic                   | - Use of cloud/dev platforms for delivery or staging (e.g., GitHub, Dropbox)                                                                                                      |
 | **Obfuscation Detection**       | Matches encoding, base64 strings, and other obfuscation patterns in commands  | - Base64/encoded payloads, reflection-based attacks, `-EncodedCommand` flags                                                                                                      |
 | **Log Writer**                  | Logs structured detection messages to a custom path                           | - Human-readable alerts for all detected threats                                                                                                                                  |
+
+# Privlege Escalation:
+
+| Functionality                 | What It Does                                                         | What It Detects                                                                                     |
+| ----------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Sysmon Presence Check         | Detects if Sysmon is installed and enables advanced event monitoring | Enables collection of deep system-level telemetry if Sysmon is available                            |
+| Monitor-Sysmon                | Hooks into Sysmon event log for PE-relevant IDs                      | Process injection (IDs 8, 10), DLL/Image load hijacking (ID 7), outbound network connections (ID 3) |
+| Monitor-TokenManipulation     | Listens to Windows Security logs                                     | Privilege use attempts, SeDebugPrivilege, impersonation (Event IDs 4673, 4674, 4696)                |
+| Monitor-PowerShellBlocks      | Parses PowerShell script block logs (ID 4104)                        | Suspicious PowerShell execution like reflection, obfuscation, or encoded payloads                   |
+| WMI Registry Change Detection | (from earlier script) Watches Run/RunOnce/IFEO registry keys         | Persistence via registry autostarts, execution hijacking                                            |
+| WMI Service Creation Monitor  | Captures Win32\_Service creation events                              | Service creation/modification attacks                                                               |
+| WMI Scheduled Task Monitor    | Detects newly registered scheduled tasks                             | Persistence or escalation via task abuse                                                            |
+| WMI User Account Monitoring   | Watches for account additions or privilege changes                   | Account manipulation, privilege group escalation                                                    |
+| WMI File Write Watcher        | Monitors sensitive folders like Startup, Tasks folder                | File drops related to persistence or PE via autostart vectors                                       |
+| Fallback Logging              | Uses WMI-based detection if Sysmon is unavailable                    | Ensures minimum detection on legacy systems without Sysmon                                          |
+| Log-Detection Handler         | Central logging to flat text file with timestamps                    | Records all detection events for analyst review or further processing                               |
