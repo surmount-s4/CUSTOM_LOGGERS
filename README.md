@@ -29,6 +29,17 @@ Loggers made for monitoring and logging signatures corresponding to Mitre Attack
 | **Obfuscation Detection**       | Matches encoding, base64 strings, and other obfuscation patterns in commands  | - Base64/encoded payloads, reflection-based attacks, `-EncodedCommand` flags                                                                                                      |
 | **Log Writer**                  | Logs structured detection messages to a custom path                           | - Human-readable alerts for all detected threats                                                                                                                                  |
 
+# Initial Access:
+
+| Functionality              | What It Does                                                                                              | What It Detects                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **SuspiciousProcessChain** | Hooks into Sysmon EventID 1 (or WMI ProcessStartTrace) to inspect parent→child process chains             | PowerShell (or other) spawned by browsers, email clients, or Office apps                          |
+| **LOLBinUsage**            | Monitors process creations for known “Living‑Off‑the‑Land” binaries with suspicious switches              | Execution of `mshta`, `regsvr32`, `rundll32`, `certutil`, `bitsadmin` with encoded/download flags |
+| **OfficeMacroExec**        | Detects Office hosts spawning script engines via Sysmon or WMI                                            | Word/Excel launching `wscript`, `cscript`, `powershell`, or `dllhost`                             |
+| **RegistryRunKeySet**      | Watches for registry “Run” or “RunOnce” values being created/modified (Sysmon EventID 13 or WMI fallback) | New persistence entries under `HKLM\…\Run*` or `HKCU\…\Run*`                                      |
+| **ScheduledTaskCreated**   | Uses WMI file‑watch on the System32\Tasks folder to catch new task XML files                              | Creation of any new Scheduled Task definition                                                     |
+
+
 # Execution:
 
 | **Functionality**                        | **What It Does**                                                                 | **What It Detects**                                                                |
