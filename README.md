@@ -29,6 +29,24 @@ Loggers made for monitoring and logging signatures corresponding to Mitre Attack
 | **Obfuscation Detection**       | Matches encoding, base64 strings, and other obfuscation patterns in commands  | - Base64/encoded payloads, reflection-based attacks, `-EncodedCommand` flags                                                                                                      |
 | **Log Writer**                  | Logs structured detection messages to a custom path                           | - Human-readable alerts for all detected threats                                                                                                                                  |
 
+# Execution:
+
+| **Functionality**                        | **What It Does**                                                                 | **What It Detects**                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Process Execution via WMI**            | Monitors creation of suspicious processes like `powershell.exe`, `cmd.exe`, etc. | T1059 (Command and Scripting Interpreter), T1204 (User Execution), T1218 (LOLBins) |
+| **Command Line Analysis**                | Checks command lines for keywords like `-EncodedCommand`, `IEX`, `bypass`        | Obfuscated or encoded execution, AMSI bypasses, T1059, T1086                       |
+| **ScriptBlock Logging (Event ID 4104)**  | Parses PowerShell block logs for malicious functions                             | T1059.001, T1086, fileless execution, in-memory code                               |
+| **Scheduled Task Creation (WMI & COM)**  | Detects job creation via `Win32_ScheduledJob` & `Win32_ScheduledTask`            | T1053.005 (Scheduled Task/Job), T1204.002                                          |
+| **New Service Installation**             | Monitors `Win32_Service` for new entries                                         | T1543.003 (Create or Modify System Process), Persistence via services              |
+| **Executable/Script File Detection**     | Watches for execution of files with suspicious extensions                        | T1059, T1036 (Masquerading), Initial Access/Execution via droppers                 |
+| **DLL Load Monitoring (Sysmon ID 7)**    | Flags DLLs loaded from temp/user folders                                         | T1574.002 (DLL Sideloading), T1055 (Injection)                                     |
+| **Process Injection (Sysmon IDs 8, 10)** | Detects remote thread injection & process tampering                              | T1055 (Process Injection), T1105 (Ingress Tool Transfer)                           |
+| **Parent–Child Correlation**             | Flags Office-spawned interpreters (e.g., `winword.exe` → `powershell.exe`)       | T1203 (Office Apps), T1566.001 (Phishing w/Attachment), T1059                      |
+| **Defender Alerts (Event ID 1116)**      | Monitors for real-time Microsoft Defender detections                             | T1204, T1036, T1059, zero-day or AV-flagged binaries                               |
+| **Sysmon Process Monitoring (ID 1)**     | Captures full process creation logs (fallback to command line)                   | Broad detection of T1059, T1547, T1218                                             |
+| **Resilient Error Handling**             | Tries catch blocks if logs are missing (no crash)                                | Ensures uptime across all Windows versions                                         |
+
+
 # Privlege Escalation:
 
 | Functionality                 | What It Does                                                         | What It Detects                                                                                     |
