@@ -46,6 +46,16 @@ Loggers made for monitoring and logging signatures corresponding to Mitre Attack
 | **Sysmon Process Monitoring (ID 1)**     | Captures full process creation logs (fallback to command line)                   | Broad detection of T1059, T1547, T1218                                             |
 | **Resilient Error Handling**             | Tries catch blocks if logs are missing (no crash)                                | Ensures uptime across all Windows versions                                         |
 
+# Persistence:
+
+| Functionality                         | What It Does                                                                                                    | What It Detects                                                                                                                                                                   |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Baseline Diff Engine**              | Compares a newly captured snapshot against the stored baseline file and logs any differences.                   | Additions, deletions or modifications in any monitored artifact (registry, files, event logs, WMI/ETW).                                                                           |
+| **Registry Monitoring**               | Reads and snapshots values under both 32‑ and 64‑bit registry hives for Run, RunOnce, IFEO, AppInit\_DLLs, COM  | Creation, modification or removal of autostart entries (Run/RunOnce), IFEO hijacks, AppInit\_DLLs loads, COM hijacking registrations.                                             |
+| **File‑Integrity Monitoring**         | Recursively lists file paths + timestamps under Startup folders, the Tasks directory, Chrome extension folders. | New, removed or changed files in common persistence locations (Startup LNKs, scheduled‑task XMLs, browser hooks/extensions).                                                      |
+| **Event Log Monitoring**              | Queries Windows Event Logs (Sysmon/Operational, Security, System) for a set of persistence‑relevant Event IDs   | Process executions (Sysmon ID 1), image loads (ID 7), code injections (IDs 8/10), service installations (System 7045/Security 4697), task creation (4702), token ops (4673/4696). |
+| **WMI & ETW Subscription Monitoring** | Captures legacy WMI filters/consumers/bindings and lists active ETW session names via wevtutil.                 | New or altered WMI event filters/consumers/bindings (T1546.004) and creation or removal of ETW sessions that could hide event consumers.                                          |
+
 
 # Privlege Escalation:
 
