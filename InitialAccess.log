@@ -1,0 +1,65 @@
+﻿{"Timestamp":"2025-07-21T20:59:43.8052292+05:30","Details":{"HasSysmon":true,"Timestamp":"2025-07-21T20:59:43.7863962+05:30","HasWinEvent":false},"Type":"MonitorStartup"}
+================================================================================
+[07/21/2025 21:09:12] SECURITY ALERT - MonitorStartup (Risk: 4/10)
+
+MITRE ATT&CK: True
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"MITREAttack":true,"ProcessId":10880,"Description":"","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-21T21:09:12.5788529+05:30","HasWinEvent":false},"Timestamp":"2025-07-21T21:09:12.6637119+05:30","EventType":"MonitorStartup","RiskScore":4}
+================================================================================
+
+================================================================================
+[07/21/2025 21:29:59] SECURITY ALERT - MonitorStartup
+Severity: Medium 
+
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":10880,"Description":"","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-21T21:29:59.6741295+05:30","HasWinEvent":false},"Timestamp":"2025-07-21T21:29:59.6915315+05:30","SeverityReason":"","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 00:18:14] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":3940,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T00:18:14.6223207+05:30","HasWinEvent":false},"Timestamp":"2025-07-22T00:18:14.6343996+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 00:21:51] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":3940,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T00:21:51.3320815+05:30","HasWinEvent":false},"Timestamp":"2025-07-22T00:21:51.3351203+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 00:32:50] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":3940,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T00:32:50.3778405+05:30","HasWinEvent":false,"EventSubscribers":6},"Timestamp":"2025-07-22T00:32:50.3853202+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 00:59:28] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":3940,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T00:59:28.3309435+05:30","HasWinEvent":false,"EventSubscribers":6},"Timestamp":"2025-07-22T00:59:28.3333418+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 01:17:50] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":33576,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T01:17:50.4252333+05:30","HasWinEvent":true,"EventSubscribers":7},"Timestamp":"2025-07-22T01:17:50.4402415+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+
+================================================================================
+[07/22/2025 08:49:16] SECURITY ALERT - MonitorStartup
+Severity: Medium (System initialization)
+Security monitoring script started
+Host: DESKTOP-IGL4I7C | User: Swaraj
+JSON: {"ProcessId":31268,"Description":"Security monitoring script started","UserName":"Swaraj","ComputerName":"DESKTOP-IGL4I7C","Severity":"Medium","Details":{"HasSysmon":true,"Timestamp":"2025-07-22T08:49:16.8378688+05:30","HasWinEvent":true,"EventSubscribers":7},"Timestamp":"2025-07-22T08:49:16.8461121+05:30","SeverityReason":"System initialization","EventType":"MonitorStartup"}
+================================================================================
+

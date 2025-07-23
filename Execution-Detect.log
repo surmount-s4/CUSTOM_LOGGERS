@@ -1,0 +1,188 @@
+[2025-07-22 08:49:35] Execution monitoring script started.
+[2025-07-22 08:49:36] PowerShell 4104 monitoring not available: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:49:36] [Sysmon] Event ID 1 not monitored: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:49:36] [Sysmon] Event ID 7 not monitored: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:49:36] [Sysmon] Event ID 8 not monitored: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:49:36] [Sysmon] Event ID 10 not monitored: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:49:36] [AMSI] Defender monitoring not available: The term 'Register-WinEvent' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+[2025-07-22 08:57:19] Execution monitoring script started (Compatible Version).
+[2025-07-22 08:57:19] PowerShell Version: 5.1.26100.4202
+[2025-07-22 08:57:19] PowerShell Edition: Desktop
+[2025-07-22 08:57:19] OS: Microsoft Windows 11 Home Single Language Build 26100
+[2025-07-22 08:57:19] [SUCCESS] WMI Process monitoring enabled.
+[2025-07-22 08:57:19] [SUCCESS] Legacy Scheduled Job monitoring enabled.
+[2025-07-22 08:57:20] [SUCCESS] Service monitoring enabled.
+[2025-07-22 08:57:20] [SUCCESS] File system monitoring enabled.
+[2025-07-22 08:57:20] [INFO] Starting alternative event log monitoring...
+[2025-07-22 08:57:21] [SUCCESS] PowerShell ScriptBlock monitoring job started (Job ID: 10).
+[2025-07-22 08:57:21] [SUCCESS] Sysmon monitoring job started (Job ID: 12).
+[2025-07-22 08:57:21] [SUCCESS] Windows Defender monitoring job started (Job ID: 14).
+[2025-07-22 08:57:21] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 08:57:21] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 08:57:22] [SUCCESS] Registry persistence monitoring job started (Job ID: 16).
+[2025-07-22 08:57:22] [INFO] All monitoring systems initialized. Script running continuously...
+[2025-07-22 08:57:22] [INFO] To stop monitoring, close this PowerShell session or stop the running jobs.
+[2025-07-22 08:58:51] [SUSPICIOUS] ScriptBlock: PowerShell: # Test script to trigger security monitoring
+Write-Host "Testing security monitoring..."
+
+# This should trigger suspicious execution detection
+$en...
+[2025-07-22 08:59:21] [SUSPICIOUS] ScriptBlock: PowerShell: # Test script to trigger security monitoring
+Write-Host "Testing security monitoring..."
+
+# This should trigger suspicious execution detection
+$en...
+[2025-07-22 09:11:33] Execution monitoring script started (Compatible Version).
+[2025-07-22 09:11:33] PowerShell Version: 5.1.26100.4202
+[2025-07-22 09:11:33] PowerShell Edition: Desktop
+[2025-07-22 09:11:34] OS: Microsoft Windows 11 Home Single Language Build 26100
+[2025-07-22 09:11:34] [SUCCESS] WMI Process monitoring enabled.
+[2025-07-22 09:11:34] [SUCCESS] Legacy Scheduled Job monitoring enabled.
+[2025-07-22 09:11:34] [SUCCESS] Service monitoring enabled.
+[2025-07-22 09:11:35] [SUCCESS] PowerShell ScriptBlock monitoring job started (Job ID: 21).
+[2025-07-22 09:11:35] [SUCCESS] File system monitoring enabled.
+[2025-07-22 09:11:35] [SUCCESS] Sysmon monitoring job started (Job ID: 24).
+[2025-07-22 09:11:36] [SUCCESS] Windows Defender monitoring job started (Job ID: 26).
+[2025-07-22 09:11:36] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 09:11:36] [INFO] All monitoring systems initialized. Script running continuously...
+[2025-07-22 09:11:36] [INFO] To stop monitoring, close this PowerShell session or stop the running jobs.
+[2025-07-22 09:47:59] [SYSMON] Suspicious Execution: TradingView.exe CMD: "C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\TradingView.exe" --type=renderer --user-data-dir="C:\Users\Swaraj\AppData\Roaming\TradingView" --secure-schemes=sentry-ipc --bypasscsp-schemes=sentry-ipc --cors-schemes=sentry-ipc --fetch-schemes=sentry-ipc --app-user-model-id=electron.app.TradingView --app-path="C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\resources\app.asar" --enable-sandbox --lang=en-US --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=13 --time-ticks-at-unix-epoch=-1751540058970133 --launch-time-ticks=1617818299779 --field-trial-handle=4520,i,14247418765949383461,1173301294866449956,262144 --enable-features=kWebSQLAccess --disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WinDelaySpellcheckServiceInit,WinRetrieveSuggestionsOnlyOnDemand --variations-seed-version --mojo-platform-channel-handle=3856 /prefetch:1
+[2025-07-22 09:48:39] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 10:23:44] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 11:12:05] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 11:44:17] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 12:14:18] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 12:44:18] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 12:44:34] [SUSPICIOUS] ScriptBlock: PowerShell: {
+        try {
+            $exe = $Event.SourceEventArgs.NewEvent.ProcessName.ToLower()
+            $cmd = $Event.SourceEventArgs.NewEvent.Command...
+[2025-07-22 12:44:44] [SUSPICIOUS] ScriptBlock: PowerShell: {
+        try {
+            $exe = $Event.SourceEventArgs.NewEvent.ProcessName.ToLower()
+            $cmd = $Event.SourceEventArgs.NewEvent.Command...
+[2025-07-22 12:45:04] [SUSPICIOUS] ScriptBlock: PowerShell: {
+        try {
+            $exe = $Event.SourceEventArgs.NewEvent.ProcessName.ToLower()
+            $cmd = $Event.SourceEventArgs.NewEvent.Command...
+[2025-07-22 12:45:14] [SUSPICIOUS] ScriptBlock: PowerShell: {
+        try {
+            $exe = $Event.SourceEventArgs.NewEvent.ProcessName.ToLower()
+            $cmd = $Event.SourceEventArgs.NewEvent.Command...
+[2025-07-22 13:14:19] [STATUS] Monitoring active - Uptime:  hours
+[2025-07-22 13:16:48] [SYSMON] Suspicious Execution: powershell.exe CMD: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command "try { . \"c:\Users\Swaraj\AppData\Local\Programs\Microsoft VS Code\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1\" } catch {}"
+[2025-07-22 13:17:45] Execution monitoring script started (Compatible Version).
+[2025-07-22 13:17:45] PowerShell Version: 5.1.26100.4202
+[2025-07-22 13:17:45] PowerShell Edition: Desktop
+[2025-07-22 13:17:45] OS: Microsoft Windows 11 Home Single Language Build 26100
+[2025-07-22 13:17:45] [SUCCESS] WMI Process monitoring enabled.
+[2025-07-22 13:17:45] [SUCCESS] Legacy Scheduled Job monitoring enabled.
+[2025-07-22 13:17:46] [SUCCESS] Service monitoring enabled.
+[2025-07-22 13:17:46] [SUCCESS] PowerShell ScriptBlock monitoring job started (Job ID: 31).
+[2025-07-22 13:17:47] [SUCCESS] File system monitoring enabled.
+[2025-07-22 13:17:47] [SUCCESS] Sysmon monitoring job started (Job ID: 34).
+[2025-07-22 13:17:47] [SUCCESS] Windows Defender monitoring job started (Job ID: 36).
+[2025-07-22 13:17:47] [INFO] All monitoring systems initialized. Script running continuously...
+[2025-07-22 13:17:47] [INFO] To stop monitoring, close this PowerShell session or stop the running jobs.
+[2025-07-22 13:17:48] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 13:17:48] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 13:17:59] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 13:18:49] [SYSMON] Suspicious Execution: TradingView.exe CMD: "C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\TradingView.exe" --type=renderer --user-data-dir="C:\Users\Swaraj\AppData\Roaming\TradingView" --secure-schemes=sentry-ipc --bypasscsp-schemes=sentry-ipc --cors-schemes=sentry-ipc --fetch-schemes=sentry-ipc --app-user-model-id=electron.app.TradingView --app-path="C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\resources\app.asar" --no-sandbox --no-zygote --lang=en-US --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=10 --time-ticks-at-unix-epoch=-1751540058969982 --launch-time-ticks=1630467598309 --field-trial-handle=3824,i,1616830148685216133,2423939830588845143,262144 --enable-features=kWebSQLAccess --disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WinDelaySpellcheckServiceInit,WinRetrieveSuggestionsOnlyOnDemand --variations-seed-version --mojo-platform-channel-handle=3336 /prefetch:1
+[2025-07-22 13:19:00] [SYSMON] Suspicious Execution: TradingView.exe CMD: "C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\TradingView.exe" --type=renderer --user-data-dir="C:\Users\Swaraj\AppData\Roaming\TradingView" --secure-schemes=sentry-ipc --bypasscsp-schemes=sentry-ipc --cors-schemes=sentry-ipc --fetch-schemes=sentry-ipc --app-user-model-id=electron.app.TradingView --app-path="C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\resources\app.asar" --enable-sandbox --lang=en-US --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=17 --time-ticks-at-unix-epoch=-1751540058969982 --launch-time-ticks=1630478099623 --field-trial-handle=2728,i,1616830148685216133,2423939830588845143,262144 --enable-features=kWebSQLAccess --disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WinDelaySpellcheckServiceInit,WinRetrieveSuggestionsOnlyOnDemand --variations-seed-version --mojo-platform-channel-handle=1848 /prefetch:1
+[2025-07-22 13:19:27] [SYSMON] Suspicious Execution: TradingView.exe CMD: "C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\TradingView.exe" --type=renderer --user-data-dir="C:\Users\Swaraj\AppData\Roaming\TradingView" --secure-schemes=sentry-ipc --bypasscsp-schemes=sentry-ipc --cors-schemes=sentry-ipc --fetch-schemes=sentry-ipc --app-user-model-id=electron.app.TradingView --app-path="C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\resources\app.asar" --no-sandbox --no-zygote --lang=en-US --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=10 --time-ticks-at-unix-epoch=-1751540058969982 --launch-time-ticks=1630467598309 --field-trial-handle=3824,i,1616830148685216133,2423939830588845143,262144 --enable-features=kWebSQLAccess --disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WinDelaySpellcheckServiceInit,WinRetrieveSuggestionsOnlyOnDemand --variations-seed-version --mojo-platform-channel-handle=3336 /prefetch:1
+[2025-07-22 13:23:29] [SYSMON] Suspicious Execution: TradingView.exe CMD: "C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\TradingView.exe" --type=renderer --user-data-dir="C:\Users\Swaraj\AppData\Roaming\TradingView" --secure-schemes=sentry-ipc --bypasscsp-schemes=sentry-ipc --cors-schemes=sentry-ipc --fetch-schemes=sentry-ipc --app-user-model-id=electron.app.TradingView --app-path="C:\Program Files\WindowsApps\TradingView.Desktop_2.11.0.7073_x64__n534cwy3pjxzj\resources\app.asar" --enable-sandbox --lang=en-US --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=12 --time-ticks-at-unix-epoch=-1751540058969873 --launch-time-ticks=1630741326140 --field-trial-handle=4020,i,3482549905724391857,15567247874503328414,262144 --enable-features=kWebSQLAccess --disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WinDelaySpellcheckServiceInit,WinRetrieveSuggestionsOnlyOnDemand --variations-seed-version --mojo-platform-channel-handle=4072 /prefetch:1
+[2025-07-22 13:47:47] [STATUS] Monitoring active - Uptime: 0.5 hours
+[2025-07-22 14:17:47] [STATUS] Monitoring active - Uptime: 1 hours
+[2025-07-22 14:58:22] [STATUS] Monitoring active - Uptime: 1.68 hours
+[2025-07-22 15:12:31] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:12:39] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:12:39] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:13:01] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:13:09] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:13:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:01] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:31] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:18:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:02] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:32] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:32] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:32] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:19:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:02] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:02] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:02] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:10] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:32] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:20:40] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_C:\ProgramData\CustomSecurityLogs\PrivlegeEscalation.ps1'
+[2025-07-22 15:22:24] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:22:25] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:22:35] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:22:54] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:22:55] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:23:05] [SUSPICIOUS] ScriptBlock: PowerShell: # === CONFIGURATION ===
+$logPath = "$env:ProgramData\CustomSecurityLogs\PrivlegeEscalation.log"
+$EventLogQueryInterval = 5  # in seconds
+
+# Ensure...
+[2025-07-22 15:25:47] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 15:25:48] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 15:58:29] [STATUS] Monitoring active - Uptime: 2.68 hours
+[2025-07-22 15:59:02] [SYSMON] Suspicious Execution: rg.exe CMD: "c:\Users\Swaraj\AppData\Local\Programs\Microsoft VS Code\resources\app\node_modules\@vscode\ripgrep\bin\rg.exe" --files --hidden --case-sensitive --no-require-git -g !**/.git -g !**/.svn -g !**/.hg -g !**/.DS_Store -g !**/Thumbs.db -g !**/node_modules -g !**/bower_components -g !**/*.code-search --no-ignore-parent --follow --no-config --no-ignore-global
+[2025-07-22 15:59:02] [SYSMON] Suspicious Execution: rg.exe CMD: "c:\Users\Swaraj\AppData\Local\Programs\Microsoft VS Code\resources\app\node_modules\@vscode\ripgrep\bin\rg.exe" --files --hidden --case-sensitive --no-require-git -g !**/.git -g !**/.svn -g !**/.hg -g !**/.DS_Store -g !**/Thumbs.db -g !**/node_modules -g !**/bower_components -g !**/*.code-search --no-ignore-parent --follow --no-config --no-ignore-global
+[2025-07-22 16:12:48] [SYSMON] Suspicious Execution: powershell.exe CMD: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Version 5.1 -s -NoLogo -NoProfile
+[2025-07-22 16:17:20] [SYSMON] Suspicious Execution: powershell.exe CMD: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command "try { . \"c:\Users\Swaraj\AppData\Local\Programs\Microsoft VS Code\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1\" } catch {}"
+[2025-07-22 16:23:36] [SUSPICIOUS] ScriptBlock: PowerShell: 
+        param($scriptPath, $logPath, $interval)
+        
+        # Define the Log-Detection function in the job
+        function Log-Detection {...
+[2025-07-22 16:23:43] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:24:04] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:24:04] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:24:13] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:24:34] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:24:34] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:28:30] [STATUS] Monitoring active - Uptime: 3.18 hours
+[2025-07-22 16:29:35] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:29:35] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:29:46] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:30:05] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:30:05] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:30:17] [DEFENDER] Malware detection: Threat='Trojan:PowerShell/PSAttackTool.A' Path='amsi:_\Device\HarddiskVolume3\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+[2025-07-22 16:58:30] [STATUS] Monitoring active - Uptime: 3.68 hours
