@@ -1,5 +1,8 @@
 ## Cmd Line
 
+#### Prereq: 
+Windows enterprise and working group policy editor
+
 Step 1: Enable "Audit Process Creation" via Group Policy
 Open Group Policy Editor:
 
