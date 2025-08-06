@@ -45,13 +45,9 @@ foreach ($event in $events) {
         $user   = ($data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
         $cmd    = ($data | Where-Object { $_.Name -eq 'CommandLine' }).'#text'
 
-        $line = @"
-Time:    $time
-User:    $user
-Creator: $parent
-Command: $cmd
-----------------------------------------
-"@
+        $flattenedCmd = $cmd -replace "`r?`n", ' '
+        $line = "$time | $user | $parent | $flattenedCmd"
+
         Add-Content -Path $logFile -Value $line
     }
 
