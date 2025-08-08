@@ -1,8 +1,11 @@
-$logFile = "C:\Logs\ps_scriptblocks.log"
+$logFile = "C:\Logs\ps_scriptblocks.csv"
 $stateFile = "C:\Logs\last4104Timestamp.txt"
 $intervalSeconds = 5
 
 if (-not (Test-Path $logFile)) { New-Item -ItemType File -Path $logFile -Force | Out-Null }
+if ((Get-Item $logFile).Length -eq 0) {
+    "Time|User|ProcessID|ThreadID|Computer|HostApplication|ScriptBlockText" | Out-File -FilePath $logFile -Encoding utf8
+}
 
 # Initialize timestamp
 if (-not (Test-Path $stateFile) -or !(Get-Content $stateFile)) {
@@ -31,30 +34,28 @@ while ($true) {
         Sort-Object TimeCreated
 
     foreach ($event in $events) {
-        $xml = [xml]$event.ToXml()
-        $data = $xml.Event.EventData.Data
-        $time = $event.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss")
-        $user = $xml.Event.System.Security.UserID
-        $sid  = try { (New-Object System.Security.Principal.SecurityIdentifier($user)).Translate([System.Security.Principal.NTAccount]) } catch { $user }
-        $script = ($data | Where-Object { $_.Name -eq 'ScriptBlockText' }).'#text'
-        $hostApp = ($data | Where-Object { $_.Name -eq 'HostApplication' }).'#text'
+        $xml       = [xml]$event.ToXml()
+        $data      = $xml.Event.EventData.Data
 
-    
+        $time      = $event.TimeCreated.ToString("o")
+        $user      = $xml.Event.System.Security.UserID
+        $sid       = try { (New-Object System.Security.Principal.SecurityIdentifier($user)).Translate([System.Security.Principal.NTAccount]) } catch { $user }
+        $processId = $xml.Event.System.Execution.ProcessID
+        $threadId  = $xml.Event.System.Execution.ThreadID
+        $computer  = $xml.Event.System.Computer
+        $script    = ($data | Where-Object { $_.Name -eq 'ScriptBlockText' }).'#text'
+        $hostApp   = ($data | Where-Object { $_.Name -eq 'HostApplication' }).'#text'
+
         $trimmedScript = $script.Trim()
         if (
             $script -eq $null -or 
             $trimmedScript -eq '' -or 
             $trimmedScript -like 'prompt' -or 
-            ($trimmedScript.StartsWith('{') -and $trimmedScript.EndsWith('}'))
-        ) {
-            continue
-        }
+            ($trimmedScript.StartsWith('{') -and $trimmedScript.EndsWith('}') -and $trimmedScript.Length -lt 80)
+        ) { continue }
 
-$flattenedScript = $script -replace "`r?`n", ' '
-
-
-
-        $line = "$time | $sid | $hostApp | $flattenedScript"
+        $flattenedScript = $script -replace "`r?`n", ' '
+        $line = "$time|$sid|$processId|$threadId|$computer|$hostApp|$flattenedScript"
 
         Add-Content -Path $logFile -Value $line
         $startTime = $event.TimeCreated
@@ -63,5 +64,3 @@ $flattenedScript = $script -replace "`r?`n", ' '
     Set-Content -Path $stateFile -Value $startTime.ToString("o")
     Start-Sleep -Seconds $intervalSeconds
 }
-
-z
