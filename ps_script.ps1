@@ -44,7 +44,6 @@ while ($true) {
         $threadId  = $xml.Event.System.Execution.ThreadID
         $computer  = $xml.Event.System.Computer
         $script    = ($data | Where-Object { $_.Name -eq 'ScriptBlockText' }).'#text'
-        $hostApp   = ($data | Where-Object { $_.Name -eq 'HostApplication' }).'#text'
 
         # Filtering unwanted noise
         $trimmedScript = $script.Trim()
@@ -59,11 +58,10 @@ while ($true) {
 
         # CSV escaping
         $csvScript  = ($trimmedScript -replace "`r?`n", ' ') -replace '"', '""'
-        $csvHostApp = ($hostApp -replace "`r?`n", ' ') -replace '"', '""'
         $csvUser    = ($sid -replace '"', '""')
 
         # Write CSV line
-        $csvLine = """$time"",""$processId"",""$threadId"",""$computer"",""$csvUser"",""$csvHostApp"",""$csvScript"""
+        $csvLine = """$time"",""$processId"",""$threadId"",""$computer"",""$csvUser"",""$csvScript"""
         Add-Content -Path $logFile -Value $csvLine
 
         $startTime = $event.TimeCreated
