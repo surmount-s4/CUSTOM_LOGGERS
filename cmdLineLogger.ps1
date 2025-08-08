@@ -41,14 +41,20 @@ foreach ($event in $events) {
 
     $parent = ($data | Where-Object { $_.Name -eq 'ParentProcessName' }).'#text'
     if ($parent -like '*cmd.exe') {
-        $time   = $event.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss")
-        $user   = ($data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
-        $cmd    = ($data | Where-Object { $_.Name -eq 'CommandLine' }).'#text'
-
+        $time      = $event.TimeCreated.ToString("o")
+        $execProc  = $xml.Event.System.Execution.ProcessID
+        $threadID  = $xml.Event.System.Execution.ThreadID
+        $computer  = $xml.Event.System.Computer
+        $newProc   = ($data | Where-Object { $_.Name -eq 'NewProcessName' }).'#text'
+        $parent    = ($data | Where-Object { $_.Name -eq 'ParentProcessName' }).'#text'
+        $user      = ($data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $targetUsr = ($data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $cmd       = ($data | Where-Object { $_.Name -eq 'CommandLine' }).'#text'
+        
         $flattenedCmd = $cmd -replace "`r?`n", ' '
-        $line = "$time | $user | $parent | $flattenedCmd"
-
+        $line = "$time | $execProc | $threadID | $computer | $newProc | $parent | $user | $targetUsr | $flattenedCmd"
         Add-Content -Path $logFile -Value $line
+
     }
 
     $startTime = $event.TimeCreated
