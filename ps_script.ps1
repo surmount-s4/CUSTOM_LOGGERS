@@ -2,9 +2,9 @@ $logFile = "C:\Logs\ps_scriptblocks.csv"
 $stateFile = "C:\Logs\last4104Timestamp.txt"
 $intervalSeconds = 5
 
-if (-not (Test-Path $logFile)) { New-Item -ItemType File -Path $logFile -Force | Out-Null }
-if ((Get-Item $logFile).Length -eq 0) {
-    "Time|User|ProcessID|ThreadID|Computer|HostApplication|ScriptBlockText" | Out-File -FilePath $logFile -Encoding utf8
+# Create CSV with header if missing
+if (-not (Test-Path $logFile)) {
+    "Time,SID,ProcessID,ThreadID,Computer,HostApplication,ScriptBlock" | Out-File -FilePath $logFile -Encoding UTF8
 }
 
 # Initialize timestamp
@@ -34,8 +34,8 @@ while ($true) {
         Sort-Object TimeCreated
 
     foreach ($event in $events) {
-        $xml       = [xml]$event.ToXml()
-        $data      = $xml.Event.EventData.Data
+        $xml = [xml]$event.ToXml()
+        $data = $xml.Event.EventData.Data
 
         $time      = $event.TimeCreated.ToString("o")
         $user      = $xml.Event.System.Security.UserID
@@ -54,10 +54,19 @@ while ($true) {
             ($trimmedScript.StartsWith('{') -and $trimmedScript.EndsWith('}') -and $trimmedScript.Length -lt 80)
         ) { continue }
 
-        $flattenedScript = $script -replace "`r?`n", ' '
-        $line = "$time|$sid|$processId|$threadId|$computer|$hostApp|$flattenedScript"
+        $flattenedScript = $trimmedScript -replace "`r?`n", ' '
 
-        Add-Content -Path $logFile -Value $line
+        $obj = [PSCustomObject]@{
+            Time            = $time
+            SID             = $sid
+            ProcessID       = $processId
+            ThreadID        = $threadId
+            Computer        = $computer
+            HostApplication = $hostApp
+            ScriptBlock     = $flattenedScript
+        }
+        $obj | Export-Csv -Path $logFile -Append -NoTypeInformation -Encoding UTF8
+
         $startTime = $event.TimeCreated
     }
 
