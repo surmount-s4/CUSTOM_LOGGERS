@@ -2,9 +2,9 @@ $logFile = "C:\Logs\ps_scriptblocks.csv"
 $stateFile = "C:\Logs\last4104Timestamp.txt"
 $intervalSeconds = 5
 
-# Create CSV with header if missing
-if (-not (Test-Path $logFile)) {
-    "Time,SID,ProcessID,ThreadID,Computer,HostApplication,ScriptBlock" | Out-File -FilePath $logFile -Encoding UTF8
+# Ensure log file and header exist
+if (-not (Test-Path $logFile) -or (Get-Content $logFile | Measure-Object -Line).Lines -eq 0) {
+    "Time,ExecutionProcessID,ThreadID,Computer,User,HostApplication,ScriptBlockText" | Out-File -FilePath $logFile -Encoding UTF8
 }
 
 # Initialize timestamp
@@ -24,8 +24,8 @@ while ($true) {
     }
 
     $filter = @{
-        LogName = 'Microsoft-Windows-PowerShell/Operational'
-        Id = 4104
+        LogName   = 'Microsoft-Windows-PowerShell/Operational'
+        Id        = 4104
         StartTime = $startTime
     }
 
@@ -34,38 +34,37 @@ while ($true) {
         Sort-Object TimeCreated
 
     foreach ($event in $events) {
-        $xml = [xml]$event.ToXml()
-        $data = $xml.Event.EventData.Data
+        $xml       = [xml]$event.ToXml()
+        $data      = $xml.Event.EventData.Data
 
         $time      = $event.TimeCreated.ToString("o")
-        $user      = $xml.Event.System.Security.UserID
-        $sid       = try { (New-Object System.Security.Principal.SecurityIdentifier($user)).Translate([System.Security.Principal.NTAccount]) } catch { $user }
+        $userSid   = $xml.Event.System.Security.UserID
+        $sid       = try { (New-Object System.Security.Principal.SecurityIdentifier($userSid)).Translate([System.Security.Principal.NTAccount]) } catch { $userSid }
         $processId = $xml.Event.System.Execution.ProcessID
         $threadId  = $xml.Event.System.Execution.ThreadID
         $computer  = $xml.Event.System.Computer
         $script    = ($data | Where-Object { $_.Name -eq 'ScriptBlockText' }).'#text'
         $hostApp   = ($data | Where-Object { $_.Name -eq 'HostApplication' }).'#text'
 
+        # Filtering unwanted noise
         $trimmedScript = $script.Trim()
         if (
             $script -eq $null -or 
             $trimmedScript -eq '' -or 
             $trimmedScript -like 'prompt' -or 
             ($trimmedScript.StartsWith('{') -and $trimmedScript.EndsWith('}') -and $trimmedScript.Length -lt 80)
-        ) { continue }
-
-        $flattenedScript = $trimmedScript -replace "`r?`n", ' '
-
-        $obj = [PSCustomObject]@{
-            Time            = $time
-            SID             = $sid
-            ProcessID       = $processId
-            ThreadID        = $threadId
-            Computer        = $computer
-            HostApplication = $hostApp
-            ScriptBlock     = $flattenedScript
+        ) {
+            continue
         }
-        $obj | Export-Csv -Path $logFile -Append -NoTypeInformation -Encoding UTF8
+
+        # CSV escaping
+        $csvScript  = ($trimmedScript -replace "`r?`n", ' ') -replace '"', '""'
+        $csvHostApp = ($hostApp -replace "`r?`n", ' ') -replace '"', '""'
+        $csvUser    = ($sid -replace '"', '""')
+
+        # Write CSV line
+        $csvLine = """$time"",""$processId"",""$threadId"",""$computer"",""$csvUser"",""$csvHostApp"",""$csvScript"""
+        Add-Content -Path $logFile -Value $csvLine
 
         $startTime = $event.TimeCreated
     }
