@@ -1,0 +1,27 @@
+﻿=== Collection Tactics Live Monitor Started at 08/07/2025 14:08:16 ===
+PowerShell Version: 5.1.26100.4652
+OS: Microsoft Windows NT 10.0.26100.0
+User: Swaraj
+Log Level: INFO
+Monitor Duration: Continuous
+Refresh Interval: 30 seconds
+=== Collection Techniques Monitored ===
+T1005 - Data from Local System
+T1039 - Data from Network Shared Drive  
+T1025 - Data from Removable Media
+T1113 - Screen Capture
+T1125 - Video Capture
+T1123 - Audio Capture
+T1115 - Clipboard Data
+T1056 - Input Capture
+T1560 - Archive Collected Data
+T1074 - Data Staged
+T1119 - Automated Collection
+==========================================
+
+
+=== Collection Monitoring Summary ===
+Duration: 00:00:01.5365032
+Techniques Detected: 0
+No collection techniques detected during monitoring period
+=== Collection Logger Stopped at 08/07/2025 14:08:17 ===

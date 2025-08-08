@@ -1,475 +1,438 @@
-# Enhanced Initial Access Detection Monitor with Sysmon (if available) and WMI/FSW fallback
-# ---------------------------------------------------------------
-# This script integrates advanced detections (LOLBins, registry/task persistence,
-# Office macros) and automatically prefers Sysmon with Register-WinEvent,
-# falling back to WMI or FileSystemWatcher where necessary.
+#Requires -RunAsAdministrator
 
-# Log file path (folder auto-created)
-$LogFile = "$env:ProgramData\CustomSecurityLogs\InitialAccess.log"
-$LogPath = Split-Path $LogFile
-if (-not (Test-Path $LogPath)) { New-Item -ItemType Directory -Path $LogPath -Force }
+<#
+.SYNOPSIS
+    Initial Access Tactics Logger using Sysmon and Windows Event Logs - Windows Server 2012 Compatible
+.DESCRIPTION
+    Monitors and logs Initial Access techniques using Sysmon events and Windows Security logs
+    Compatible with PowerShell 3.0+ and Windows Server 2012
+.PARAMETER OutputPath
+    Path where log files will be stored
+.PARAMETER LogLevel
+    Logging level (Info, Warning, Critical)
+.PARAMETER MonitorDuration
+    Duration in minutes to monitor (0 = continuous)
+.PARAMETER RefreshInterval
+    Interval in seconds between monitoring checks (default: 30)
+#>
 
-function Write-Log {
-    param($Type, $Details, $Severity = 'Medium', $Description = '', $SeverityReason = '')
-    try {
-        $Event = @{
-            Timestamp = (Get-Date).ToString('o')
-            EventType = $Type
-            Severity = $Severity
-            SeverityReason = $SeverityReason
-            Description = $Description
-            ComputerName = $env:COMPUTERNAME
-            UserName = $env:USERNAME
-            ProcessId = $PID
-            Details = $Details
-        }
-        
-        # Pretty print for readability
-        $LogEntry = "=" * 80
-        $LogEntry += "`n[$(Get-Date)] SECURITY ALERT - $Type"
-        $LogEntry += "`nSeverity: $Severity $(if($SeverityReason) { "($SeverityReason)" })"
-        $LogEntry += "`n$Description"
-        $LogEntry += "`nHost: $env:COMPUTERNAME | User: $env:USERNAME"
-        $LogEntry += "`nJSON: $($Event | ConvertTo-Json -Compress)"
-        $LogEntry += "`n" + "=" * 80 + "`n"
-        
-        $LogEntry | Out-File -FilePath $LogFile -Append -Encoding UTF8
-    } catch {
-        Write-Error "Failed to write log: $_"
-    }
-}
+param(
+    [string]$OutputPath = "$env:ProgramData\CustomSecurityLogs\CUSTOM_LOGGERS",
+    [ValidateSet("Info", "Warning", "Critical")]
+    [string]$LogLevel = "Info",
+    [int]$MonitorDuration = 0,
+    [int]$RefreshInterval = 30
+)
 
-# Cleanup existing event subscriptions to avoid duplicates
-Get-EventSubscriber | Unregister-Event -ErrorAction SilentlyContinue
+# Global variables
+$Script:LogFile = ""
+$Script:StartTime = Get-Date
+$Script:EventCounters = @{}
+$Script:LastEventTime = Get-Date
 
-# Determine availability of Sysmon and WinEvent cmdlets
-$HasSysmon = $false
-try { if ((Get-Service -Name Sysmon -ErrorAction Stop).Status -eq 'Running') { $HasSysmon = $true } } catch {}
-$HasWinEvent = (Get-Command Get-WinEvent -ErrorAction SilentlyContinue) -ne $null
-
-Write-Host "System Configuration:" -ForegroundColor Yellow
-Write-Host "  HasSysmon: $HasSysmon" -ForegroundColor Gray  
-Write-Host "  HasWinEvent: $HasWinEvent" -ForegroundColor Gray
-if ($HasSysmon -and $HasWinEvent) {
-    Write-Host "  Using Sysmon event monitoring" -ForegroundColor Green
-} else {
-    Write-Host "  Using WMI monitoring for process events" -ForegroundColor Green
-}
-
-# 1. PROCESS CREATION: Suspicious chains, LOLBins, Office macros
-if ($HasSysmon -and $HasWinEvent) {
-    Write-Host "Registering Sysmon event monitoring..." -ForegroundColor Green
+# Initialize logging
+function Initialize-Logger {
+    param([string]$Path)
     
-    # Create a runspace for Sysmon event monitoring
-    $SysmonMonitor = {
-        try {
-            # Monitor Sysmon process creation events (Event ID 1)
-            $events = Get-WinEvent -LogName 'Microsoft-Windows-Sysmon/Operational' -FilterXPath "*[System/EventID=1]" -MaxEvents 10 -ErrorAction SilentlyContinue
-            foreach ($evt in $events) {
-                $xml = [xml]$evt.ToXml()
-                $eventData = $xml.Event.EventData.Data
-                
-                $Parent = ($eventData | Where-Object Name -eq 'ParentImage').'#text'
-                $Image = ($eventData | Where-Object Name -eq 'Image').'#text' 
-                $Cmd = ($eventData | Where-Object Name -eq 'CommandLine').'#text'
-                $ProcessId = ($eventData | Where-Object Name -eq 'ProcessId').'#text'
-                $ParentProcessId = ($eventData | Where-Object Name -eq 'ParentProcessId').'#text'
-                
-                # Check for suspicious PowerShell chains
-                if ($Image -imatch 'powershell.exe' -and $Parent -imatch 'chrome|firefox|msedge|outlook|thunderbird|winword|excel') {
-                    $parentApp = ($Parent -split '\\')[-1]
-                    $description = "[SYSMON] [Sysmon-ID1] DETECTED: Suspicious PowerShell execution spawned from $parentApp. This could indicate a malicious script or exploit delivery via web browser or email client."
-                    Write-Log 'SysmonProcessChain' @{ 
-                        ParentProcess = $Parent
-                        ChildProcess = $Image
-                        CommandLine = $Cmd
-                        ProcessId = $ProcessId
-                        ParentProcessId = $ParentProcessId
-                        EventTime = $evt.TimeCreated
-                        SysmonEventId = 1
-                        EventSource = 'Sysmon'
-                    } 'High' $description 'Sysmon Event ID 1 detected browser/email spawned PowerShell'
-                }
-                
-                # Check for LOLBins
-                foreach ($Bin in 'mshta.exe','regsvr32.exe','rundll32.exe','certutil.exe','bitsadmin.exe') {
-                    if ($Image -match $Bin -and $Cmd -imatch '-encodedcommand|-url|-addstore|-install|-download') {
-                        $suspiciousArgs = if ($Cmd) { ($Cmd | Select-String -Pattern '(-encodedcommand|-url|-addstore|-install|-download)' -AllMatches).Matches.Value -join ', ' } else { 'Unknown' }
-                        $description = "[SYSMON] [Sysmon-ID1] DETECTED: Living-off-the-land binary ($Bin) with suspicious arguments: $suspiciousArgs"
-                        Write-Log 'SysmonLOLBinUsage' @{ 
-                            Binary = $Image
-                            ProcessId = $ProcessId
-                            FullCommandLine = $Cmd
-                            SuspiciousArguments = $suspiciousArgs
-                            EventTime = $evt.TimeCreated
-                            SysmonEventId = 1
-                            EventSource = 'Sysmon'
-                        } 'High' $description 'Sysmon Event ID 1 detected LOLBin usage'
-                    }
-                }
-                
-                # Check for Office macro execution
-                if ($Parent -imatch 'winword.exe|excel.exe' -and $Image -imatch 'wscript.exe|cscript.exe|powershell.exe|dllhost.exe') {
-                    $officeApp = ($Parent -split '\\')[-1]
-                    $scriptEngine = ($Image -split '\\')[-1]
-                    $description = "SYSMON DETECTED: Office application ($officeApp) spawned script interpreter ($scriptEngine). Strong indicator of macro-based malware execution."
-                    Write-Log 'SysmonOfficeMacroExec' @{ 
-                        OfficeApplication = $Parent
-                        SpawnedProcess = $Image
-                        ScriptEngine = $scriptEngine
-                        CommandLine = $Cmd
-                        ProcessId = $ProcessId
-                        ParentProcessId = $ParentProcessId  
-                        EventTime = $evt.TimeCreated
-                        EventSource = 'Sysmon'
-                    } 'Critical' $description 'Sysmon detected Office macro execution'
-                }
-            }
-        } catch {
-            Write-Log 'SysmonMonitorError' @{ Error=$_.Exception.Message; EventSource = 'Sysmon' } 'Low' "Sysmon monitoring error: $($_.Exception.Message)"
+    if (!(Test-Path $Path)) {
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    }
+    
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $Script:LogFile = Join-Path $Path "InitialAccess_$timestamp.log"
+    
+    # Write initial log header without verbose console output
+    $headerInfo = @"
+=== Initial Access Logger Started ===
+Start Time: $(Get-Date)
+PowerShell Version: $($PSVersionTable.PSVersion)
+OS: $((Get-WmiObject Win32_OperatingSystem).Caption)
+Log File: $Script:LogFile
+=====================================
+"@
+    Add-Content -Path $Script:LogFile -Value $headerInfo
+}
+
+# Write log entries - Windows Server 2012 compatible with enhanced field support
+function Write-LogEntry {
+    param(
+        [string]$Level,
+        [string]$Message,
+        [string]$EventID = "",
+        [string]$ProcessName = "",
+        [string]$CommandLine = "",
+        [string]$Technique = "",
+        [string]$TargetFilename = "",
+        [string]$ProcessId = "",
+        [string]$User = "",
+        [string]$ProcessGuid = "",
+        [string]$Hashes = "",
+        [string]$AdditionalFields = ""
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+    
+    if ($EventID) { $logEntry += " | EventID: $EventID" }
+    if ($ProcessName) { $logEntry += " | Process: $ProcessName" }
+    if ($ProcessId) { $logEntry += " | PID: $ProcessId" }
+    if ($User) { $logEntry += " | User: $User" }
+    if ($CommandLine) { $logEntry += " | CommandLine: $CommandLine" }
+    if ($TargetFilename) { $logEntry += " | TargetFile: $TargetFilename" }
+    if ($ProcessGuid) { $logEntry += " | GUID: $ProcessGuid" }
+    if ($Hashes) { $logEntry += " | Hashes: $Hashes" }
+    if ($Technique) { $logEntry += " | Technique: $Technique" }
+    if ($AdditionalFields) { $logEntry += " | Additional: $AdditionalFields" }
+    
+    # Write to console based on log level setting
+    if ($Level -eq "CRITICAL" -or ($Level -eq "WARNING" -and $LogLevel -in @("Info", "Warning")) -or $LogLevel -eq "Info") {
+        switch ($Level) {
+            "CRITICAL" { Write-Host $logEntry -ForegroundColor Red }
+            "WARNING" { Write-Host $logEntry -ForegroundColor Yellow }
+            default { Write-Host $logEntry -ForegroundColor Green }
         }
     }
     
-    # Register Sysmon monitoring as a periodic job
-    $SysmonTimer = New-Object Timers.Timer 3000  # Check every 3 seconds
-    $SysmonTimer.AutoReset = $true
-    $SysmonTimer.Enabled = $true
-    Register-ObjectEvent -InputObject $SysmonTimer -EventName Elapsed -SourceIdentifier 'SysmonMonitor' -Action $SysmonMonitor
-} else {
-    Write-Host "Registering WMI process monitoring..." -ForegroundColor Green
-    Register-WmiEvent -Query "SELECT * FROM Win32_ProcessStartTrace" -SourceIdentifier 'WMIProc' -Action {
-        try {
-            $P = Get-CimInstance Win32_Process -Filter "ProcessId=$($Event.NewEvent.ProcessId)" -ErrorAction SilentlyContinue
-            if (-not $P) { return }
-            
-            $Parent = try { Get-CimInstance Win32_Process -Filter "ProcessId=$($P.ParentProcessId)" -ErrorAction SilentlyContinue } catch { $null }
-            $Image = $P.Name; $Cmd = $P.CommandLine
-            
-            # Debug: Log all process creation for troubleshooting
-            Write-Log 'ProcessCreated' @{
-                ProcessName = $Image
-                ProcessID = $P.ProcessId
-                CommandLine = $Cmd
-                ParentName = if ($Parent) { $Parent.Name } else { 'Unknown' }
-                ParentPID = if ($Parent) { $Parent.ProcessId } else { 0 }
-            } 'Low' "Process created: $Image" 'WMI process monitoring'
-            
-            if ($Image -imatch 'powershell.exe' -and $Parent -and $Parent.Name -imatch 'chrome|firefox|msedge|outlook|thunderbird|winword|excel') {
-                $parentApp = $Parent.Name
-                $description = "Suspicious PowerShell execution spawned from $parentApp. This could indicate a malicious script or exploit delivery via web browser or email client."
-                Write-Log 'SuspiciousProcessChain' @{ 
-                    ParentProcess = $Parent.Name
-                    ParentPID = $Parent.ProcessId
-                    ChildProcess = $Image
-                    ChildPID = $P.ProcessId
-                    CommandLine = $Cmd
-                    ProcessCreationTime = (Get-Date).ToString('o')
-                } 'High' $description 'Process spawned from browser/email client'
-            }
-            
-            foreach ($Bin in 'mshta.exe','regsvr32.exe','rundll32.exe','certutil.exe','bitsadmin.exe') {
-                if ($Image -ieq $Bin -and $Cmd -imatch '-encodedcommand|-url|-addstore|-install|-download') {
-                    $suspiciousArgs = if ($Cmd) { ($Cmd | Select-String -Pattern '(-encodedcommand|-url|-addstore|-install|-download)' -AllMatches).Matches.Value -join ', ' } else { 'Unknown' }
-                    $description = "Living-off-the-land binary ($Bin) detected with suspicious arguments: $suspiciousArgs. This technique is commonly used to evade detection while executing malicious payloads."
-                    Write-Log 'LOLBinUsage' @{ 
-                        Binary = $Image
-                        ProcessID = $P.ProcessId
-                        FullCommandLine = $Cmd
-                        SuspiciousArguments = $suspiciousArgs
-                        WorkingDirectory = $P.ExecutablePath
-                    } 'High' $description 'Living-off-the-land binary with suspicious args'
-                }
-            }
-            
-            if ($Parent -and $Parent.Name -imatch 'winword.exe|excel.exe' -and $Image -imatch 'wscript.exe|cscript.exe|powershell.exe|dllhost.exe') {
-                $officeApp = $Parent.Name
-                $scriptEngine = $Image
-                $description = "Office application ($officeApp) spawned script interpreter ($scriptEngine). This is a strong indicator of macro-based malware execution."
-                Write-Log 'OfficeMacroExec' @{ 
-                    OfficeApplication = $Parent.Name
-                    OfficePID = $Parent.ProcessId
-                    SpawnedProcess = $Image
-                    SpawnedPID = $P.ProcessId
-                    ScriptEngine = $scriptEngine
-                    CommandLine = $Cmd
-                } 'Critical' $description 'Office app spawned script interpreter'
-            }
-        } catch {
-            Write-Log 'ProcessMonitorError' @{ Error=$_.Exception.Message }
+    # Write to file
+    Add-Content -Path $Script:LogFile -Value $logEntry
+    
+    # Update counters - PowerShell 3.0 compatible
+    if ($Technique) {
+        if ($Script:EventCounters.ContainsKey($Technique)) {
+            $Script:EventCounters[$Technique] = $Script:EventCounters[$Technique] + 1
+        } else {
+            $Script:EventCounters[$Technique] = 1
         }
     }
+    
+    $Script:LastEventTime = Get-Date
 }
 
-# 2. REGISTRY PERSISTENCE: Run keys via periodic snapshot
-$RunPaths = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run','HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-function Get-RunEntries {
-    $entries = @{}
-    foreach ($p in $RunPaths) {
-        try {
-            if (Test-Path $p) {
-                $props = (Get-ItemProperty -Path $p -ErrorAction Stop).PSObject.Properties.Name | Where-Object { $_ -notmatch '^PS' }
-                foreach ($name in $props) { 
-                    $value = (Get-ItemProperty -Path $p -Name $name -ErrorAction SilentlyContinue).$name
-                    if ($value) { $entries["$p::$name"] = $value }
-                }
-            }
-        } catch {}
-    }
-    return $entries
-}
-
-$script:PrevRun = Get-RunEntries
-$RegTimer = New-Object Timers.Timer 5000
-$RegTimer.AutoReset = $true
-$RegTimer.Enabled = $true
-Register-ObjectEvent -InputObject $RegTimer -EventName Elapsed -SourceIdentifier 'RegScan' -Action {
+# Check if Sysmon is available
+function Test-SysmonAvailable {
     try {
-        $CurrRun = Get-RunEntries
-        $added = $CurrRun.Keys | Where-Object { -not $script:PrevRun.ContainsKey($_) }
-        foreach ($key in $added) { 
-            $keyPath = $key -split '::'
-            $regPath = $keyPath[0]
-            $valueName = $keyPath[1]
-            $value = $CurrRun[$key]
-            
-            $description = "New registry Run key persistence detected at $regPath. Value '$valueName' set to '$value'. This is a common persistence mechanism used by malware to maintain access."
-            $riskIndicators = @()
-            
-            # Risk assessment
-            if ($value -imatch '\.tmp|temp|appdata\\local\\temp') { $riskIndicators += 'Temporary directory execution' }
-            if ($value -imatch 'powershell|cmd\.exe|wscript|cscript') { $riskIndicators += 'Script interpreter usage' }
-            if ($value -imatch '-enc|-hidden|-bypass|-exec') { $riskIndicators += 'Suspicious command line arguments' }
-            if ($value -imatch 'http|ftp|download') { $riskIndicators += 'Network activity indicators' }
-            
-            $severity = if ($riskIndicators.Count -gt 2) { 'Critical' } elseif ($riskIndicators.Count -gt 0) { 'High' } else { 'Medium' }
-            $severityReason = if ($riskIndicators.Count -gt 0) { "$($riskIndicators.Count) risk indicators found" } else { 'Standard registry persistence' }
-            
-            Write-Log 'RegistryRunKeySet' @{ 
-                RegistryPath = $regPath
-                ValueName = $valueName
-                ValueData = $value
-                RiskIndicators = $riskIndicators
-                UserContext = if ($regPath -like '*HKCU*') { 'Current User' } else { 'All Users' }
-                DetectionTime = (Get-Date).ToString('o')
-            } $severity $description $severityReason
+        $sysmonService = Get-Service -Name "Sysmon*" -ErrorAction SilentlyContinue
+        if ($sysmonService -and $sysmonService.Status -eq "Running") {
+            return $true
         }
-        $script:PrevRun = $CurrRun
+        
+        # Test if we can query Sysmon log
+        $null = Get-WinEvent -LogName "Microsoft-Windows-Sysmon/Operational" -MaxEvents 1 -ErrorAction Stop
+        return $true
     } catch {
-        Write-Log 'RegistryMonitorError' @{ Error=$_.Exception.Message }
+        return $false
     }
 }
 
-# 3. SCHEDULED TASKS: FileSystemWatcher with fallback
-$TaskFolder = "$env:windir\System32\Tasks"
-if (Test-Path $TaskFolder) {
+# Get events with error handling for Windows Server 2012
+function Get-EventsSecure {
+    param(
+        [string]$LogName,
+        [hashtable]$FilterHashtable = @{},
+        [int]$MaxEvents = 50
+    )
+    
     try {
-        $FSW = New-Object IO.FileSystemWatcher $TaskFolder
-        $FSW.Filter = "*"
-        $FSW.IncludeSubdirectories = $false
-        $FSW.EnableRaisingEvents = $true
-        Register-ObjectEvent -InputObject $FSW -EventName Created -SourceIdentifier 'TaskCreation' -Action {
-            $taskName = $Event.SourceEventArgs.Name
-            $taskPath = $Event.SourceEventArgs.FullPath
-            $description = "New scheduled task file created: $taskName. Scheduled tasks are commonly used by attackers for persistence and privilege escalation."
-            
-            # Try to read task details if possible
-            $taskDetails = @{
-                TaskName = $taskName
-                TaskPath = $taskPath
-                CreationTime = (Get-Date).ToString('o')
-                FileSize = if (Test-Path $taskPath) { (Get-Item $taskPath).Length } else { 'Unknown' }
-            }
-            
-            Write-Log 'ScheduledTaskCreated' $taskDetails 'Medium' $description 'Scheduled task file detected'
+        # Windows Server 2012 compatible event filtering
+        if ($FilterHashtable.Count -gt 0) {
+            return Get-WinEvent -FilterHashtable $FilterHashtable -MaxEvents $MaxEvents -ErrorAction SilentlyContinue
+        } else {
+            return Get-WinEvent -LogName $LogName -MaxEvents $MaxEvents -ErrorAction SilentlyContinue
         }
     } catch {
-        # Fallback to periodic scanning
-        $script:ExistingTasks = Get-ChildItem -Path $TaskFolder -Name -ErrorAction SilentlyContinue
-        $TaskTimer = New-Object Timers.Timer 5000
-        $TaskTimer.AutoReset = $true
-        $TaskTimer.Enabled = $true
-        Register-ObjectEvent -InputObject $TaskTimer -EventName Elapsed -SourceIdentifier 'TaskScan' -Action {
+        Write-LogEntry "WARNING" "Failed to retrieve events from $LogName : $($_.Exception.Message)"
+        return @()
+    }
+}
+
+# Parse event data - Windows Server 2012 compatible
+function Get-EventData {
+    param([System.Diagnostics.Eventing.Reader.EventLogRecord]$Event)
+    
+    try {
+        $eventXML = [xml]$Event.ToXml()
+        $eventData = @{}
+        
+        # Extract data fields
+        if ($eventXML.Event.EventData.Data) {
+            foreach ($data in $eventXML.Event.EventData.Data) {
+                if ($data.Name) {
+                    $eventData[$data.Name] = $data.'#text'
+                }
+            }
+        }
+        
+        return $eventData
+    } catch {
+        return @{}
+    }
+}
+
+# Monitor Initial Access - T1566 Spearphishing Attachment
+function Monitor-SpearphishingAttachment {
+    param([array]$Events)
+    
+    foreach ($event in $Events) {
+        $eventData = Get-EventData -Event $event
+        $image = $eventData["Image"]
+        $commandLine = $eventData["CommandLine"]
+        $parentImage = $eventData["ParentImage"]
+        $processId = $eventData["ProcessId"]
+        $user = $eventData["User"]
+        $processGuid = $eventData["ProcessGuid"]
+        $hashes = $eventData["Hashes"]
+        
+        # Detect script execution from email clients
+        if ($parentImage -match "outlook\.exe|thunderbird\.exe|mailbird\.exe") {
+            if ($image -match "powershell\.exe|wscript\.exe|cscript\.exe|cmd\.exe") {
+                Write-LogEntry "CRITICAL" "Spearphishing attachment detected: Email client spawned script interpreter" `
+                    -EventID "1" -ProcessName $image -CommandLine $commandLine -Technique "T1566.001" `
+                    -ProcessId $processId -User $user -ProcessGuid $processGuid -Hashes $hashes `
+                    -AdditionalFields "Parent: $parentImage"
+            }
+        }
+        
+        # Detect Office macro execution
+        if ($parentImage -match "winword\.exe|excel\.exe|powerpnt\.exe") {
+            if ($image -match "powershell\.exe|wscript\.exe|cscript\.exe|cmd\.exe|dllhost\.exe") {
+                Write-LogEntry "CRITICAL" "Office macro execution detected" `
+                    -EventID "1" -ProcessName $image -CommandLine $commandLine -Technique "T1566.001" `
+                    -ProcessId $processId -User $user -ProcessGuid $processGuid -Hashes $hashes `
+                    -AdditionalFields "Office App: $parentImage"
+            }
+        }
+    }
+}
+
+# Monitor Initial Access - T1189 Drive-by Compromise
+function Monitor-DriveByCompromise {
+    param([array]$Events)
+    
+    foreach ($event in $Events) {
+        $eventData = Get-EventData -Event $event
+        $image = $eventData["Image"]
+        $commandLine = $eventData["CommandLine"]
+        $parentImage = $eventData["ParentImage"]
+        $processId = $eventData["ProcessId"]
+        $user = $eventData["User"]
+        
+        # Detect suspicious process spawning from browsers
+        if ($parentImage -match "chrome\.exe|firefox\.exe|msedge\.exe|iexplore\.exe") {
+            if ($image -match "powershell\.exe|wscript\.exe|cscript\.exe|cmd\.exe") {
+                Write-LogEntry "CRITICAL" "Drive-by compromise detected: Browser spawned script interpreter" `
+                    -EventID "1" -ProcessName $image -CommandLine $commandLine -Technique "T1189" `
+                    -ProcessId $processId -User $user -AdditionalFields "Browser: $parentImage"
+            }
+        }
+    }
+}
+
+# Monitor Initial Access - T1190 Exploit Public-Facing Application
+function Monitor-ExploitPublicApplication {
+    param([array]$Events)
+    
+    foreach ($event in $Events) {
+        $eventData = Get-EventData -Event $event
+        $image = $eventData["Image"]
+        $commandLine = $eventData["CommandLine"]
+        $parentImage = $eventData["ParentImage"]
+        $processId = $eventData["ProcessId"]
+        
+        # Detect web server spawning suspicious processes
+        if ($parentImage -match "w3wp\.exe|httpd\.exe|nginx\.exe|apache\.exe|iisexpress\.exe") {
+            if ($image -match "powershell\.exe|cmd\.exe|wscript\.exe|cscript\.exe") {
+                Write-LogEntry "CRITICAL" "Web server exploit detected: Web server spawned system process" `
+                    -EventID "1" -ProcessName $image -CommandLine $commandLine -Technique "T1190" `
+                    -ProcessId $processId -AdditionalFields "WebServer: $parentImage"
+            }
+        }
+    }
+}
+
+# Monitor Initial Access - T1133 External Remote Services
+function Monitor-ExternalRemoteServices {
+    param([array]$SecurityEvents)
+    
+    foreach ($event in $SecurityEvents) {
+        $eventData = Get-EventData -Event $event
+        
+        # Monitor RDP logons (Event ID 4624, Logon Type 10)
+        if ($event.Id -eq 4624) {
+            $logonType = $eventData["LogonType"]
+            $targetUserName = $eventData["TargetUserName"]
+            $ipAddress = $eventData["IpAddress"]
+            $workstationName = $eventData["WorkstationName"]
+            
+            if ($logonType -eq "10") { # RDP logon
+                # Check for external IP addresses (not private ranges)
+                if ($ipAddress -and $ipAddress -notmatch "^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])\.|^127\.|^169\.254\.") {
+                    Write-LogEntry "WARNING" "External RDP logon detected" `
+                        -EventID "4624" -User $targetUserName -Technique "T1133" `
+                        -AdditionalFields "SourceIP: $ipAddress, Workstation: $workstationName, LogonType: RDP"
+                }
+            }
+        }
+        
+        # Monitor failed RDP attempts (Event ID 4625)
+        if ($event.Id -eq 4625) {
+            $targetUserName = $eventData["TargetUserName"]
+            $ipAddress = $eventData["IpAddress"]
+            $failureReason = $eventData["FailureReason"]
+            
+            if ($ipAddress -and $ipAddress -notmatch "^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])\.|^127\.|^169\.254\.") {
+                Write-LogEntry "INFO" "Failed external logon attempt" `
+                    -EventID "4625" -User $targetUserName -Technique "T1133" `
+                    -AdditionalFields "SourceIP: $ipAddress, Reason: $failureReason"
+            }
+        }
+    }
+}
+
+# Monitor Initial Access - T1078 Valid Accounts
+function Monitor-ValidAccounts {
+    param([array]$SecurityEvents)
+    
+    foreach ($event in $SecurityEvents) {
+        if ($event.Id -eq 4624) {
+            $eventData = Get-EventData -Event $event
+            $targetUserName = $eventData["TargetUserName"]
+            $logonType = $eventData["LogonType"]
+            $ipAddress = $eventData["IpAddress"]
+            
+            # Monitor for unusual logon times or patterns
+            $currentHour = (Get-Date).Hour
+            if ($currentHour -lt 6 -or $currentHour -gt 22) {
+                if ($logonType -in @("2", "3", "10")) { # Interactive, Network, RDP
+                    Write-LogEntry "WARNING" "Off-hours logon detected" `
+                        -EventID "4624" -User $targetUserName -Technique "T1078" `
+                        -AdditionalFields "LogonType: $logonType, Time: $(Get-Date), SourceIP: $ipAddress"
+                }
+            }
+        }
+    }
+}
+
+# Monitor file creation for dropped payloads
+function Monitor-FileCreation {
+    param([array]$Events)
+    
+    foreach ($event in $Events) {
+        $eventData = Get-EventData -Event $event
+        $targetFilename = $eventData["TargetFilename"]
+        $image = $eventData["Image"]
+        $processId = $eventData["ProcessId"]
+        
+        # Monitor executable files created in temp directories
+        if ($targetFilename -match "\\Temp\\.*\.(exe|dll|scr|com|bat|cmd|ps1|vbs|js)$") {
+            Write-LogEntry "WARNING" "Suspicious file created in temp directory" `
+                -EventID "11" -ProcessName $image -TargetFilename $targetFilename -Technique "T1566.001" `
+                -ProcessId $processId
+        }
+        
+        # Monitor files with double extensions
+        if ($targetFilename -match "\.(pdf|doc|docx|xls|xlsx|ppt|pptx)\.(exe|scr|com|bat|cmd|ps1|vbs)$") {
+            Write-LogEntry "CRITICAL" "File with double extension detected" `
+                -EventID "11" -ProcessName $image -TargetFilename $targetFilename -Technique "T1566.001" `
+                -ProcessId $processId
+        }
+    }
+}
+
+# Print summary statistics
+function Show-Summary {
+    Write-Host "`n=== Initial Access Monitoring Summary ===" -ForegroundColor Cyan
+    Write-Host "Monitoring Duration: $([math]::Round(((Get-Date) - $Script:StartTime).TotalMinutes, 2)) minutes" -ForegroundColor White
+    Write-Host "Last Event Time: $($Script:LastEventTime)" -ForegroundColor White
+    Write-Host "Log File: $Script:LogFile" -ForegroundColor White
+    
+    if ($Script:EventCounters.Count -gt 0) {
+        Write-Host "`nDetected Techniques:" -ForegroundColor Yellow
+        foreach ($technique in $Script:EventCounters.Keys | Sort-Object) {
+            Write-Host "  $technique : $($Script:EventCounters[$technique]) events" -ForegroundColor White
+        }
+    } else {
+        Write-Host "`nNo suspicious activities detected." -ForegroundColor Green
+    }
+    Write-Host "==========================================`n" -ForegroundColor Cyan
+}
+
+# Main monitoring function
+function Start-InitialAccessMonitoring {
+    Initialize-Logger -Path $OutputPath
+    Write-LogEntry "INFO" "Initial Access monitoring started"
+    
+    $sysmonAvailable = Test-SysmonAvailable
+    Write-LogEntry "INFO" "Sysmon available: $sysmonAvailable"
+    
+    Write-Host "Initial Access Live Monitor v1.0 (Server 2012 Compatible)" -ForegroundColor Cyan
+    Write-Host "Sysmon Available: $sysmonAvailable" -ForegroundColor $(if ($sysmonAvailable) { "Green" } else { "Yellow" })
+    Write-Host "Press Ctrl+C to stop monitoring`n" -ForegroundColor Gray
+    
+    $endTime = if ($MonitorDuration -gt 0) { (Get-Date).AddMinutes($MonitorDuration) } else { [DateTime]::MaxValue }
+    
+    try {
+        while ((Get-Date) -lt $endTime) {
             try {
-                $CurrTasks = Get-ChildItem -Path $TaskFolder -Name -ErrorAction SilentlyContinue
-                if ($script:ExistingTasks -and $CurrTasks) {
-                    $added = Compare-Object -ReferenceObject $script:ExistingTasks -DifferenceObject $CurrTasks | Where-Object SideIndicator -eq '=>' | Select-Object -ExpandProperty InputObject
-                    foreach ($t in $added) { 
-                        $taskPath = Join-Path $TaskFolder $t
-                        $description = "New scheduled task file detected: $t. Scheduled tasks are commonly used by attackers for persistence and privilege escalation."
-                        Write-Log 'ScheduledTaskCreated' @{
-                            TaskName = $t
-                            TaskPath = $taskPath
-                            DetectionMethod = 'Periodic Scan'
-                            CreationTime = (Get-Date).ToString('o')
-                            FileSize = if (Test-Path $taskPath) { (Get-Item $taskPath).Length } else { 'Unknown' }
-                        } 'Medium' $description 'Scheduled task detected via scan'
+                # Monitor Sysmon events if available
+                if ($sysmonAvailable) {
+                    # Process Creation (Event ID 1)
+                    $processEvents = Get-EventsSecure -FilterHashtable @{
+                        LogName = "Microsoft-Windows-Sysmon/Operational"
+                        ID = 1
+                        StartTime = $Script:LastEventTime.AddSeconds(-$RefreshInterval)
+                    } -MaxEvents 100
+                    
+                    if ($processEvents) {
+                        Monitor-SpearphishingAttachment -Events $processEvents
+                        Monitor-DriveByCompromise -Events $processEvents
+                        Monitor-ExploitPublicApplication -Events $processEvents
+                    }
+                    
+                    # File Creation (Event ID 11)
+                    $fileEvents = Get-EventsSecure -FilterHashtable @{
+                        LogName = "Microsoft-Windows-Sysmon/Operational"
+                        ID = 11
+                        StartTime = $Script:LastEventTime.AddSeconds(-$RefreshInterval)
+                    } -MaxEvents 100
+                    
+                    if ($fileEvents) {
+                        Monitor-FileCreation -Events $fileEvents
                     }
                 }
-                $script:ExistingTasks = $CurrTasks
+                
+                # Monitor Security events
+                $securityEvents = Get-EventsSecure -FilterHashtable @{
+                    LogName = "Security"
+                    ID = @(4624, 4625)
+                    StartTime = $Script:LastEventTime.AddSeconds(-$RefreshInterval)
+                } -MaxEvents 100
+                
+                if ($securityEvents) {
+                    Monitor-ExternalRemoteServices -SecurityEvents $securityEvents
+                    Monitor-ValidAccounts -SecurityEvents $securityEvents
+                }
+                
             } catch {
-                Write-Log 'TaskMonitorError' @{ Error=$_.Exception.Message }
+                Write-LogEntry "WARNING" "Error in monitoring cycle: $($_.Exception.Message)"
             }
-        }
-    }
-}
-
-# 4. USB Autorun & Device Arrival
-Register-WmiEvent -Class Win32_VolumeChangeEvent -SourceIdentifier 'USBDetect' -Action {
-    try {
-        $Drive = $Event.NewEvent.DriveName
-        if ($Drive -and (Test-Path (Join-Path $Drive 'autorun.inf'))) {
-            $autorunPath = Join-Path $Drive 'autorun.inf'
-            $autorunContent = if (Test-Path $autorunPath) { Get-Content $autorunPath -Raw -ErrorAction SilentlyContinue } else { 'Unable to read' }
-            $description = "USB device with autorun.inf detected on drive $Drive. This could be an attempt to execute malicious code automatically when the device is accessed."
             
-            Write-Log 'USB_Autorun_Detected' @{ 
-                DriveLetter = $Drive
-                AutorunPath = $autorunPath
-                AutorunContent = $autorunContent
-                DetectionTime = (Get-Date).ToString('o')
-                VolumeLabel = (Get-Volume -DriveLetter $Drive.Replace(':','') -ErrorAction SilentlyContinue).FileSystemLabel
-            } 'High' $description 'USB with autorun.inf detected'
+            Start-Sleep -Seconds $RefreshInterval
         }
     } catch {
-        Write-Log 'USBMonitorError' @{ Error=$_.Exception.Message }
-    }
-}
-
-# Track existing USB devices to detect new arrivals
-$script:ExistingUSBDevices = Get-PnpDevice -Class USB -Status OK | Where-Object { $_.InstanceId -match '^USB' } | Select-Object -ExpandProperty InstanceId
-Register-WmiEvent -Class Win32_DeviceChangeEvent -SourceIdentifier 'USBDeviceArrival' -Action {
-    try {
-        if ($Event.NewEvent.EventType -eq 2) {
-            $CurrentUSBDevices = Get-PnpDevice -Class USB -Status OK | Where-Object { $_.InstanceId -match '^USB' }
-            $NewDevices = $CurrentUSBDevices | Where-Object { $_.InstanceId -notin $script:ExistingUSBDevices }
-            foreach ($device in $NewDevices) {
-                $description = "New USB device connected: $($device.FriendlyName). Monitor for potential data exfiltration or malware introduction."
-                $deviceInfo = @{
-                    DeviceName = $device.FriendlyName
-                    DeviceID = $device.InstanceId
-                    DeviceClass = $device.Class
-                    DeviceStatus = $device.Status
-                    ConnectionTime = (Get-Date).ToString('o')
-                    HardwareID = $device.HardwareID -join '; '
-                }
-                
-                # Enhanced risk assessment for USB devices
-                $riskLevel = 'Low'
-                $riskReason = 'Standard USB device'
-                if ($device.FriendlyName -imatch 'mass storage|disk|drive') { 
-                    $riskLevel = 'Medium'
-                    $riskReason = 'Storage device detected'
-                }
-                if ($device.FriendlyName -imatch 'unknown|generic') { 
-                    $riskLevel = 'High'
-                    $riskReason = 'Unknown/generic device'
-                }
-                
-                Write-Log 'USB_DeviceConnected' $deviceInfo $riskLevel $description $riskReason
-            }
-            $script:ExistingUSBDevices = $CurrentUSBDevices | Select-Object -ExpandProperty InstanceId
-        }
-    } catch {
-        Write-Log 'USBDeviceMonitorError' @{ Error=$_.Exception.Message }
-    }
-}
-
-# 5. BUILT-IN ACCOUNT LOGONS (4624/4625) via WinEvent only if available
-if ($HasWinEvent) {
-    Write-Host "Registering Security event monitoring..." -ForegroundColor Green
-    
-    $SecurityMonitor = {
-        try {
-            # Check recent logon events
-            $events = Get-WinEvent -LogName 'Security' -FilterXPath "*[System[(EventID=4624 or EventID=4625)]]" -MaxEvents 5 -ErrorAction SilentlyContinue
-            foreach ($evt in $events) {
-                $xml = [xml]$evt.ToXml()
-                $eventData = $xml.Event.EventData.Data
-                
-                $Account = ($eventData | Where-Object Name -eq 'TargetUserName').'#text'
-                $LogonType = ($eventData | Where-Object Name -eq 'LogonType').'#text'
-                $WorkstationName = ($eventData | Where-Object Name -eq 'WorkstationName').'#text'
-                $SourceIP = ($eventData | Where-Object Name -eq 'IpAddress').'#text'
-                
-                if ($Account -imatch 'Administrator|Guest|root') {
-                    $eventType = if ($evt.Id -eq 4624) { 'Successful Logon' } else { 'Failed Logon' }
-                    $description = "SECURITY LOG: $eventType attempt for built-in account '$Account' from $WorkstationName (IP: $SourceIP). Built-in account usage often indicates reconnaissance or privilege escalation attempts."
-                    
-                    Write-Log 'SecurityLogonEvent' @{ 
-                        Account = $Account
-                        EventID = $evt.Id
-                        EventType = $eventType
-                        LogonType = $LogonType
-                        Workstation = $WorkstationName
-                        SourceIP = $SourceIP
-                        EventTime = $evt.TimeCreated
-                        EventSource = 'Security Log'
-                    } 'High' $description 'Security log detected suspicious logon'
-                }
-            }
-        } catch {
-            Write-Log 'SecurityMonitorError' @{ Error=$_.Exception.Message; EventSource = 'Security Log' } 'Low' "Security event monitoring error: $($_.Exception.Message)"
-        }
+        Write-LogEntry "CRITICAL" "Monitoring stopped due to error: $($_.Exception.Message)"
     }
     
-    # Register Security log monitoring
-    $SecurityTimer = New-Object Timers.Timer 10000  # Check every 10 seconds
-    $SecurityTimer.AutoReset = $true
-    $SecurityTimer.Enabled = $true
-    Register-ObjectEvent -InputObject $SecurityTimer -EventName Elapsed -SourceIdentifier 'SecurityMonitor' -Action $SecurityMonitor
+    Show-Summary
+    Write-LogEntry "INFO" "Initial Access monitoring stopped"
 }
 
-# 6. SUSPICIOUS PORT LISTENERS
-$NetTimer = New-Object Timers.Timer 30000
-$NetTimer.AutoReset = $true
-$NetTimer.Enabled = $true
-Register-ObjectEvent -InputObject $NetTimer -EventName Elapsed -SourceIdentifier 'NetPortScan' -Action {
-    try {
-        # Detect any listening TCP ports of interest
-        $listeners = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 21,22,23,80,443,3389 }
-        foreach ($conn in $listeners) {
-            $processInfo = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
-            $processName = if ($processInfo) { $processInfo.ProcessName } else { 'Unknown' }
-            $processPath = if ($processInfo) { $processInfo.Path } else { 'Unknown' }
-            
-            $portDescription = switch ($conn.LocalPort) {
-                21 { 'FTP Service' }
-                22 { 'SSH Service' }
-                23 { 'Telnet Service' }
-                80 { 'HTTP Web Service' }
-                443 { 'HTTPS Web Service' }
-                3389 { 'Remote Desktop Service' }
-                default { 'Unknown Service' }
-            }
-            
-            $description = "Suspicious port listener detected: $portDescription (Port $($conn.LocalPort)) owned by process $processName (PID: $($conn.OwningProcess)). Unexpected services may indicate backdoor or C2 communications."
-            
-            Write-Log 'SuspiciousPortListener' @{ 
-                Port = $conn.LocalPort
-                ProcessID = $conn.OwningProcess
-                ProcessName = $processName
-                ProcessPath = $processPath
-                LocalAddress = $conn.LocalAddress
-                ServiceType = $portDescription
-                ConnectionState = $conn.State
-                DetectionTime = (Get-Date).ToString('o')
-            } 'Medium' $description 'Unexpected network service detected'
-        }
-    } catch {
-        Write-Log 'NetworkMonitorError' @{ Error=$_.Exception.Message }
-    }
+# Handle Ctrl+C gracefully
+$null = Register-ObjectEvent -InputObject ([Console]) -EventName "CancelKeyPress" -Action {
+    Write-Host "`n`nStopping Initial Access monitoring..." -ForegroundColor Yellow
+    Show-Summary
+    Write-LogEntry "INFO" "Initial Access monitoring stopped by user"
+    exit
 }
 
-# Log script startup
-Write-Log 'MonitorStartup' @{ 
-    HasSysmon=$HasSysmon; 
-    HasWinEvent=$HasWinEvent; 
-    Timestamp=(Get-Date).ToString('o')
-    EventSubscribers=(Get-EventSubscriber).Count
-} 'Medium' 'Security monitoring script started' 'System initialization'
-
-Write-Host "Active Event Subscribers: $((Get-EventSubscriber).Count)" -ForegroundColor Green
-Get-EventSubscriber | ForEach-Object { Write-Host "  - $($_.SourceIdentifier)" -ForegroundColor Gray }
-
-# Keep the script running indefinitely
-while ($true) { Start-Sleep -Seconds 30 }
+# Start monitoring
+Start-InitialAccessMonitoring
