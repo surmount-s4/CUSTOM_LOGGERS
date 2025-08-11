@@ -1,0 +1,34 @@
+=== Impact Detection Test Started ===
+Start Time: 08/10/2025 23:55:22
+Test Mode: Basic
+Output Path: C:\ProgramData\CustomSecurityLogs\CUSTOM_LOGGERS
+=====================================
+[2025-08-10 23:55:22] [INFO] Starting Impact detection tests in Basic mode
+[2025-08-10 23:55:22] [INFO] Delay between tests: 5 seconds
+[2025-08-10 23:55:22] [INFO] Testing Account Access Removal (T1531)
+[2025-08-10 23:55:22] [INFO] Account enumeration completed - 2 users found
+[2025-08-10 23:55:22] [INFO] Group enumeration completed - 3 groups found
+[2025-08-10 23:55:22] [SUCCESS] Account Access Removal test completed
+[2025-08-10 23:55:27] [INFO] Testing Data Destruction (T1485)
+[2025-08-10 23:55:27] [INFO] Created test OT files for destruction simulation
+[2025-08-10 23:55:27] [INFO] Simulated deletion of test.his
+[2025-08-10 23:55:27] [INFO] Simulated deletion of config.cfg
+[2025-08-10 23:55:27] [INFO] Simulated deletion of data.prn
+[2025-08-10 23:55:27] [INFO] Simulated deletion of backup.bak
+[2025-08-10 23:55:28] [SUCCESS] Data Destruction test completed
+[2025-08-10 23:55:33] [INFO] Testing Service Stop (T1489)
+[2025-08-10 23:55:33] [INFO] Queried service: Spooler - Status: Running
+[2025-08-10 23:55:33] [INFO] Simulated command: sc query Spooler
+[2025-08-10 23:55:33] [INFO] Simulated command: net start Spooler
+[2025-08-10 23:55:33] [INFO] Simulated command: sc config Spooler start= auto
+[2025-08-10 23:55:33] [INFO] Queried service: Themes - Status: Running
+[2025-08-10 23:55:33] [INFO] Simulated command: sc query Themes
+[2025-08-10 23:55:33] [INFO] Simulated command: net start Themes
+[2025-08-10 23:55:33] [INFO] Simulated command: sc config Themes start= auto
+[2025-08-10 23:55:33] [SUCCESS] Service Stop test completed
+[2025-08-10 23:55:38] [INFO] Testing System Shutdown/Reboot (T1529)
+[2025-08-10 23:55:38] [INFO] Executed safe shutdown command: shutdown /?
+[2025-08-10 23:55:38] [INFO] Executed safe shutdown command: shutdown /l
+[2025-08-10 23:55:38] [INFO] Simulated shutdown command: restart-computer -whatif
+[2025-08-10 23:55:38] [INFO] Simulated shutdown command: stop-computer -whatif
+[2025-08-10 23:55:38] [SUCCESS] System Shutdown/Reboot test completed

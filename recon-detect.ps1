@@ -1,5 +1,11 @@
 #Requires -RunAsAdministrator
 
+# PowerShell version compatibility check for Windows Server 2012
+if ($PSVersionTable.PSVersion.Major -lt 3) {
+    Write-Error "This script requires PowerShell 3.0 or later. Current version: $($PSVersionTable.PSVersion)"
+    exit 1
+}
+
 # --- Configuration ---
 $PortScanThreshold = 20
 $TimeWindowSeconds = 120
@@ -25,17 +31,20 @@ function Write-Log {
     # Send ALERT logs to FastAPI server
     if ($Level -eq "ALERT") {
         try {
-            $jsonBody = @{
-                timestamp = $timestamp
-                level = $Level
-                message = $Message
-            } | ConvertTo-Json
+            # Windows 2012 compatible JSON creation
+            $jsonBody = "{`"timestamp`":`"$timestamp`",`"level`":`"$Level`",`"message`":`"$($Message -replace '\"', '\\\"')`"}"
             Invoke-RestMethod -Uri $remoteLogEndpoint -Method POST -Body $jsonBody -ContentType "application/json" -TimeoutSec 5
         }
         catch {
             Write-Host "Warning: Failed to send log to FastAPI server: $_" -ForegroundColor Yellow
         }
     }
+}
+
+# --- Compatibility Check ---
+$hasNetTCPConnection = Get-Command "Get-NetTCPConnection" -ErrorAction SilentlyContinue
+if (-not $hasNetTCPConnection) {
+    Write-Log -Message "Get-NetTCPConnection not available. Using netstat fallback for Windows 2012 compatibility." -Level "INFO"
 }
 
 # --- Initialization ---
@@ -45,19 +54,50 @@ Write-Log -Message "Scan detector service started."
 
 # --- Main Loop ---
 while ($true) {
-    $connections = Get-NetTCPConnection -State SynSent, TimeWait -ErrorAction SilentlyContinue
+    if ($hasNetTCPConnection) {
+        # Modern approach using Get-NetTCPConnection
+        $connections = Get-NetTCPConnection -State SynSent, TimeWait -ErrorAction SilentlyContinue
+        
+        foreach ($conn in $connections) {
+            $remoteIP = $conn.RemoteAddress
+            if ($remoteIP -eq "127.0.0.1" -or $remoteIP -eq "::1") { continue }
 
-    foreach ($conn in $connections) {
-        $remoteIP = $conn.RemoteAddress
-        if ($remoteIP -eq "127.0.0.1" -or $remoteIP -eq "::1") { continue }
-
-        if (-not $ipTracker.ContainsKey($remoteIP)) {
-            $ipTracker[$remoteIP] = @{
-                Ports     = [System.Collections.Generic.HashSet[int]]::new()
-                FirstSeen = (Get-Date)
+            if (-not $ipTracker.ContainsKey($remoteIP)) {
+                $ipTracker[$remoteIP] = @{
+                    Ports     = @()
+                    FirstSeen = (Get-Date)
+                }
+            }
+            
+            # Add port if not already present (Windows 2012 compatible array handling)
+            if ($ipTracker[$remoteIP].Ports -notcontains $conn.RemotePort) {
+                $ipTracker[$remoteIP].Ports += $conn.RemotePort
             }
         }
-        $ipTracker[$remoteIP].Ports.Add($conn.RemotePort) | Out-Null
+    } else {
+        # Fallback approach using netstat for Windows 2012 compatibility
+        $netstatOutput = netstat -an | Where-Object { $_ -match "TCP.*SYN_SENT|TCP.*TIME_WAIT" }
+        
+        foreach ($line in $netstatOutput) {
+            if ($line -match "TCP\s+\S+:(\d+)\s+(\S+):(\d+)\s+") {
+                $remoteIP = $matches[2]
+                $remotePort = [int]$matches[3]
+                
+                if ($remoteIP -eq "127.0.0.1" -or $remoteIP -eq "::1") { continue }
+
+                if (-not $ipTracker.ContainsKey($remoteIP)) {
+                    $ipTracker[$remoteIP] = @{
+                        Ports     = @()
+                        FirstSeen = (Get-Date)
+                    }
+                }
+                
+                # Add port if not already present
+                if ($ipTracker[$remoteIP].Ports -notcontains $remotePort) {
+                    $ipTracker[$remoteIP].Ports += $remotePort
+                }
+            }
+        }
     }
 
     foreach ($ip in ($ipTracker.Keys | ForEach-Object { $_ })) {
