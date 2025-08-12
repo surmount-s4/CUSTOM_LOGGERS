@@ -38,9 +38,9 @@ $extraPorts = $protocolMap.Keys | ForEach-Object { ($_ -split "/")[1] } | Where-
 
 # helper to record observed connection into full CSV
 function Log-Full {
-    param($proto, $laddr, $lport, $raddr, $rport, $state, $pid, $pname)
+    param($proto, $laddr, $lport, $raddr, $rport, $state, $procId, $pname)
     $ts = (Get-Date).ToString("o")
-    $row = @($ts, $proto, $laddr, $lport, $raddr, $rport, $state, $pid, $pname)
+    $row = @($ts, $proto, $laddr, $lport, $raddr, $rport, $state, $procId, $pname)
     $row = $row | ForEach-Object {
         if ($_ -eq $null) { "" } else { ($_.ToString()).Replace('"','""') }
     }
@@ -128,9 +128,9 @@ function Get-Connections {
         foreach ($line in $net) {
             if ($line -match "^\s*(TCP|UDP)\s+(\S+):(\d+)\s+(\S+):(\d+|\*)\s*(\S*)\s*(\d+)$") {
                 $proto = $matches[1]; $laddr = $matches[2]; $lport = $matches[3]
-                $raddr = $matches[4]; $rport = $matches[5]; $state = $matches[6]; $pid = $matches[7]
+                $raddr = $matches[4]; $rport = $matches[5]; $state = $matches[6]; $procId = $matches[7]
                 $pname = ""
-                try { $pname = (Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName } catch {}
+                try { $pname = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName } catch {}
                 $conns += [PSCustomObject]@{
                     Protocol = $proto
                     LocalAddress = $laddr
@@ -138,7 +138,7 @@ function Get-Connections {
                     RemoteAddress = $raddr
                     RemotePort = $rport
                     State = $state
-                    ProcessId = $pid
+                    ProcessId =$procId
                     ProcessName = $pname
                 }
             }
@@ -192,7 +192,7 @@ try {
             $raddr = $c.RemoteAddress
             if ($raddr -in @("127.0.0.1","::1","0.0.0.0","")) { $raddr = "" }
 
-            Log-Full -proto $c.Protocol -laddr $c.LocalAddress -lport $c.LocalPort -raddr $raddr -rport $c.RemotePort -state $c.State -pid $c.ProcessId -pname $c.ProcessName
+            Log-Full -proto $c.Protocol -laddr $c.LocalAddress -lport $c.LocalPort -raddr $raddr -rport $c.RemotePort -state $c.State -procId $c.ProcessId -pname $c.ProcessName
 
             if ($raddr -ne "") {
                 $remotePortStr = if ($c.RemotePort -ne $null -and $c.RemotePort -ne "") { $c.RemotePort.ToString() } else { "" }
@@ -215,7 +215,7 @@ try {
         # 3) parse pktmon live for ICMP and industrial protocols
         $pktEvents = Parse-PktmonLive
         foreach ($p in $pktEvents) {
-            Log-Full -proto $p.Protocol -laddr "" -lport "" -raddr $p.RemoteAddress -rport $p.RemotePort -state "" -pid "" -pname $p.Details
+            Log-Full -proto $p.Protocol -laddr "" -lport "" -raddr $p.RemoteAddress -rport $p.RemotePort -state "" -procId "" -pname $p.Details
             if ($p.RemoteAddress) {
                 $remotePortStr = if ($p.RemotePort -ne $null -and $p.RemotePort -ne "") { $p.RemotePort.ToString() } else { "" }
                 $protoKey = ("{0}/{1}" -f $p.Protocol, $remotePortStr)
