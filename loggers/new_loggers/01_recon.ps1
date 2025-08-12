@@ -6,7 +6,7 @@ $PortScanThreshold = 20
 $TimeWindowSeconds = 120
 $LoopSleepSeconds = 5
 
-$logDir = "C:\ProgramData\CustomSecurityLogs"
+$logDir = "C:\Logs"
 if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
 
 $fullCsv = Join-Path $logDir "full_traffic_log.csv"
