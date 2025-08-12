@@ -6,13 +6,15 @@ $PortScanThreshold = 20
 $TimeWindowSeconds = 120
 $LoopSleepSeconds = 5
 
-$logDir = "C:\Logs"
+$logDir = "C:\ProgramData\CustomSecurityLogs"
 if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
 
 $fullCsv = Join-Path $logDir "full_traffic_log.csv"
 $detectCsv = Join-Path $logDir "detection_log.csv"
 
-# ensure headers
+
+
+# ensure headers (use "o" timestamp when writing rows)
 if (-not (Test-Path $fullCsv)) { "Timestamp,Protocol,LocalAddress,LocalPort,RemoteAddress,RemotePort,State,ProcessId,ProcessName" | Out-File $fullCsv -Encoding utf8 }
 if (-not (Test-Path $detectCsv)) { "Timestamp,RemoteIP,PortCount,Ports,DetectionType,Details" | Out-File $detectCsv -Encoding utf8 }
 
@@ -32,44 +34,15 @@ $protocolMap = @{
 $extraPorts = $protocolMap.Keys | ForEach-Object { ($_ -split "/")[1] } | Where-Object { $_ -match '^\d+$' } | Sort-Object -Unique
 
 # ---------- UTIL FUNCTIONS ----------
-function Write-TextLog {
-    param($msg,$level="INFO")
-    $t=(Get-Date).ToString("o")
-    $line="[$t] - $level - $msg"
-    $line | Out-File -FilePath $txtLog -Append -Encoding utf8
 
-}
-
-function Append-CSV {
-    param($file, $columns)
-    $columns -join "," | Out-File -FilePath $file -Append -Encoding utf8
-}
-
-# ---------- PKTMON SETUP ----------
-# Try to ensure pktmon is not running twice
-try { Stop-Process -Name pktmon -ErrorAction SilentlyContinue } catch {}
-# build filters file (temporary)
-$pktCfg = Join-Path $env:TEMP "pktmon_filters.txt"
-"reset" | Out-File $pktCfg -Encoding ascii
-"filter add 0 ICMP" | Out-File $pktCfg -Append -Encoding ascii
-foreach ($p in $extraPorts) { "filter add 0 TCP $p" | Out-File $pktCfg -Append -Encoding ascii; "filter add 0 UDP $p" | Out-File $pktCfg -Append -Encoding ascii }
-"start" | Out-File $pktCfg -Append -Encoding ascii
-
-# Start pktmon in live-listen mode (we'll use 'pktmon list --live')
-Start-Process -FilePath "pktmon.exe" -ArgumentList "start" -NoNewWindow -WindowStyle Hidden -ErrorAction SilentlyContinue
-
-# small in-memory dedupe for pktmon entries
-$pktSeen = [System.Collections.Generic.HashSet[string]]::new()
-
-# ---------- IP Tracker for Port-Scan Detection ----------
-$ipTracker = @{}
 
 # helper to record observed connection into full CSV
 function Log-Full {
-    param($proto,$laddr,$lport,$raddr,$rport,$state,$pid,$pname)
-    $ts=(Get-Date).ToString("o")
-    $row = @($ts,$proto,$laddr,$lport,$raddr,$rport,$state,$pid,$pname) | ForEach-Object {
-        if ($_ -eq $null) { "" } else { ($_ -toString()).Replace('"','""') }
+    param($proto, $laddr, $lport, $raddr, $rport, $state, $pid, $pname)
+    $ts = (Get-Date).ToString("o")
+    $row = @($ts, $proto, $laddr, $lport, $raddr, $rport, $state, $pid, $pname)
+    $row = $row | ForEach-Object {
+        if ($_ -eq $null) { "" } else { ($_.ToString()).Replace('"','""') }
     }
     $csv = '"' + ($row -join '","') + '"'
     $csv | Out-File -FilePath $fullCsv -Append -Encoding utf8
@@ -77,13 +50,36 @@ function Log-Full {
 
 # helper to write detection row
 function Log-Detection {
-    param($remoteIP,$portCount,$portsList,$type,$details)
-    $ts=(Get-Date).ToString("o")
-    $row = @($ts,$remoteIP,$portCount,($portsList -join ';'),$type,$details)
-    $row = $row | ForEach-Object { ($_ -toString()).Replace('"','""') }
+    param($remoteIP, $portCount, $portsList, $type, $details)
+    $ts = (Get-Date).ToString("o")
+    $row = @($ts, $remoteIP, $portCount, ($portsList -join ';'), $type, $details)
+    $row = $row | ForEach-Object { if ($_ -eq $null) { "" } else { ($_.ToString()).Replace('"','""') } }
     $csv = '"' + ($row -join '","') + '"'
     $csv | Out-File -FilePath $detectCsv -Append -Encoding utf8
+    
 }
+
+# ---------- PKTMON SETUP ----------
+# Try to ensure pktmon is not running twice
+try { Stop-Process -Name pktmon -ErrorAction SilentlyContinue } catch {}
+# build filters file (temporary) - kept for reference (pktmon invoked with default start)
+$pktCfg = Join-Path $env:TEMP "pktmon_filters.txt"
+"reset" | Out-File $pktCfg -Encoding ascii
+"filter add 0 ICMP" | Out-File $pktCfg -Append -Encoding ascii
+foreach ($p in $extraPorts) {
+    "filter add 0 TCP $p" | Out-File $pktCfg -Append -Encoding ascii
+    "filter add 0 UDP $p" | Out-File $pktCfg -Append -Encoding ascii
+}
+"start" | Out-File $pktCfg -Append -Encoding ascii
+
+# Start pktmon in live-listen mode (we'll use 'pktmon list --live')
+try { Start-Process -FilePath "pktmon.exe" -ArgumentList "start" -NoNewWindow -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {}
+
+# small in-memory dedupe for pktmon entries
+$pktSeen = [System.Collections.Generic.HashSet[string]]::new()
+
+# ---------- IP Tracker for Port-Scan Detection ----------
+$ipTracker = @{}
 
 # ---------- COLLECTION ROUTINES ----------
 function Get-Connections {
@@ -93,11 +89,17 @@ function Get-Connections {
         try {
             $tcp = Get-NetTCPConnection -ErrorAction SilentlyContinue
             foreach ($c in $tcp) {
-                $procName = try { (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName } catch { "" }
+                $procName = ""
+                try { $procName = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName } catch {}
                 $conns += [PSCustomObject]@{
-                    Protocol = "TCP"; LocalAddress = $c.LocalAddress; LocalPort = $c.LocalPort;
-                    RemoteAddress = $c.RemoteAddress; RemotePort = $c.RemotePort; State = $c.State;
-                    ProcessId = $c.OwningProcess; ProcessName = $procName
+                    Protocol = "TCP"
+                    LocalAddress = $c.LocalAddress
+                    LocalPort = $c.LocalPort
+                    RemoteAddress = $c.RemoteAddress
+                    RemotePort = $c.RemotePort
+                    State = $c.State
+                    ProcessId = $c.OwningProcess
+                    ProcessName = $procName
                 }
             }
         } catch {}
@@ -106,10 +108,17 @@ function Get-Connections {
             try {
                 $udp = Get-NetUDPEndpoint -ErrorAction SilentlyContinue
                 foreach ($u in $udp) {
-                    $procName = try { (Get-Process -Id $u.OwningProcess -ErrorAction SilentlyContinue).ProcessName } catch { "" }
+                    $procName = ""
+                    try { $procName = (Get-Process -Id $u.OwningProcess -ErrorAction SilentlyContinue).ProcessName } catch {}
                     $conns += [PSCustomObject]@{
-                        Protocol = "UDP"; LocalAddress = $u.LocalAddress; LocalPort = $u.LocalPort;
-                        RemoteAddress = ""; RemotePort = ""; State = ""; ProcessId = $u.OwningProcess; ProcessName = $procName
+                        Protocol = "UDP"
+                        LocalAddress = $u.LocalAddress
+                        LocalPort = $u.LocalPort
+                        RemoteAddress = ""
+                        RemotePort = ""
+                        State = ""
+                        ProcessId = $u.OwningProcess
+                        ProcessName = $procName
                     }
                 }
             } catch {}
@@ -120,8 +129,18 @@ function Get-Connections {
             if ($line -match "^\s*(TCP|UDP)\s+(\S+):(\d+)\s+(\S+):(\d+|\*)\s*(\S*)\s*(\d+)$") {
                 $proto = $matches[1]; $laddr = $matches[2]; $lport = $matches[3]
                 $raddr = $matches[4]; $rport = $matches[5]; $state = $matches[6]; $pid = $matches[7]
-                $pname = try { (Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName } catch { "" }
-                $conns += [PSCustomObject]@{ Protocol=$proto; LocalAddress=$laddr; LocalPort=$lport; RemoteAddress=$raddr; RemotePort=$rport; State=$state; ProcessId=$pid; ProcessName=$pname }
+                $pname = ""
+                try { $pname = (Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName } catch {}
+                $conns += [PSCustomObject]@{
+                    Protocol = $proto
+                    LocalAddress = $laddr
+                    LocalPort = $lport
+                    RemoteAddress = $raddr
+                    RemotePort = $rport
+                    State = $state
+                    ProcessId = $pid
+                    ProcessName = $pname
+                }
             }
         }
     }
@@ -134,23 +153,21 @@ function Parse-PktmonLive {
     try {
         $lines = & pktmon.exe list --live --limit 200 2>$null
         foreach ($ln in $lines) {
+            if ($null -eq $ln) { continue }
             if ($ln.Trim().Length -lt 10) { continue }
             $key = $ln.GetHashCode().ToString() + ":" + ($ln.Length)
             if ($pktSeen.Contains($key)) { continue }
             $pktSeen.Add($key) | Out-Null
             # basic parsing heuristics: look for ICMP or ip:port pairs
             if ($ln -match "ICMP") {
-                # find IPv4
                 if ($ln -match "(\d{1,3}\.){3}\d{1,3}") {
-                    $ip = ($matches[0])
+                    $ip = $matches[0]
                     $out += [PSCustomObject]@{ Protocol="ICMP"; RemoteAddress=$ip; RemotePort=""; Details=$ln }
                 }
             } else {
-                # try to match ip:port patterns
                 if ($ln -match "(\d{1,3}\.){3}\d{1,3}:(\d{1,5})") {
-                    $ip = $matches[0] -split ":" | Select-Object -First 1
+                    $ip = ($matches[0] -split ":")[0]
                     $port = $matches[2]
-                    # try to detect TCP/UDP token
                     $proto = if ($ln -match "TCP") { "TCP" } elseif ($ln -match "UDP") { "UDP" } else { "UNK" }
                     $out += [PSCustomObject]@{ Protocol=$proto; RemoteAddress=$ip; RemotePort=$port; Details=$ln }
                 }
@@ -162,6 +179,7 @@ function Parse-PktmonLive {
 
 # ---------- MAIN LOOP ----------
 Write-Host "Starting live monitor. Logs: $fullCsv and $detectCsv"
+
 
 try {
     while ($true) {
@@ -177,16 +195,18 @@ try {
             Log-Full -proto $c.Protocol -laddr $c.LocalAddress -lport $c.LocalPort -raddr $raddr -rport $c.RemotePort -state $c.State -pid $c.ProcessId -pname $c.ProcessName
 
             if ($raddr -ne "") {
-                $protoKey = ("{0}/{1}" -f $c.Protocol, ($c.RemotePort -as [string]))
+                $remotePortStr = if ($c.RemotePort -ne $null -and $c.RemotePort -ne "") { $c.RemotePort.ToString() } else { "" }
+                $protoKey = ("{0}/{1}" -f $c.Protocol, $remotePortStr)
                 if (-not $ipTracker.ContainsKey($raddr)) {
                     $ipTracker[$raddr] = @{ Ports = @(); FirstSeen = (Get-Date) }
                 }
-                if ($ipTracker[$raddr].Ports -notcontains $protoKey) {
+                if ($remotePortStr -ne "" -and ($ipTracker[$raddr].Ports -notcontains $protoKey)) {
                     $ipTracker[$raddr].Ports += $protoKey
                 }
             }
             # also detect known-protocol single-flow matches (log as detection)
-            $protoKeyExact = ("{0}/{1}" -f $c.Protocol, ($c.RemotePort -as [string]))
+            $remotePortStr2 = if ($c.RemotePort -ne $null -and $c.RemotePort -ne "") { $c.RemotePort.ToString() } else { "" }
+            $protoKeyExact = ("{0}/{1}" -f $c.Protocol, $remotePortStr2)
             if ($protocolMap.ContainsKey($protoKeyExact)) {
                 Log-Detection -remoteIP ($c.RemoteAddress) -portCount 1 -portsList @($protoKeyExact) -type "ProtocolMatch" -details $protocolMap[$protoKeyExact]
             }
@@ -197,18 +217,18 @@ try {
         foreach ($p in $pktEvents) {
             Log-Full -proto $p.Protocol -laddr "" -lport "" -raddr $p.RemoteAddress -rport $p.RemotePort -state "" -pid "" -pname $p.Details
             if ($p.RemoteAddress) {
-                $protoKey = ("{0}/{1}" -f $p.Protocol, ($p.RemotePort -as [string]))
+                $remotePortStr = if ($p.RemotePort -ne $null -and $p.RemotePort -ne "") { $p.RemotePort.ToString() } else { "" }
+                $protoKey = ("{0}/{1}" -f $p.Protocol, $remotePortStr)
                 if (-not $ipTracker.ContainsKey($p.RemoteAddress)) {
                     $ipTracker[$p.RemoteAddress] = @{ Ports = @(); FirstSeen = (Get-Date) }
                 }
-                if ($p.RemotePort -ne "") {
-                    if ($ipTracker[$p.RemoteAddress].Ports -notcontains $protoKey) {
-                        $ipTracker[$p.RemoteAddress].Ports += $protoKey
-                    }
+                if ($remotePortStr -ne "" -and ($ipTracker[$p.RemoteAddress].Ports -notcontains $protoKey)) {
+                    $ipTracker[$p.RemoteAddress].Ports += $protoKey
                 }
             }
             # if port maps to protocol, log detection
-            $protoKeyExact = ("{0}/{1}" -f $p.Protocol, ($p.RemotePort -as [string]))
+            $remotePortStr2 = if ($p.RemotePort -ne $null -and $p.RemotePort -ne "") { $p.RemotePort.ToString() } else { "" }
+            $protoKeyExact = ("{0}/{1}" -f $p.Protocol, $remotePortStr2)
             if ($protocolMap.ContainsKey($protoKeyExact)) {
                 Log-Detection -remoteIP $p.RemoteAddress -portCount 1 -portsList @($protoKeyExact) -type "ProtocolMatch" -details $protocolMap[$protoKeyExact]
             } elseif ($p.Protocol -eq "ICMP") {
@@ -221,7 +241,8 @@ try {
             $entry = $ipTracker[$ip]
             $age = (Get-Date) - $entry.FirstSeen
             if ($age.TotalSeconds -gt $TimeWindowSeconds) {
-                $ipTracker.Remove($ip); continue
+                $ipTracker.Remove($ip)
+                continue
             }
             $count = $entry.Ports.Count
             if ($count -gt $PortScanThreshold) {
@@ -239,4 +260,5 @@ try {
 } finally {
     # try stopping pktmon gracefully
     try { Start-Process -FilePath "pktmon.exe" -ArgumentList "stop" -NoNewWindow -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {}
+    
 }
