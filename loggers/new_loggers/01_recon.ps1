@@ -1,121 +1,156 @@
-# Recon Detection in OT Networks (IP-level pktmon + TCP ACK sweep detection)
-# Save as ReconDetect.ps1 and run as Admin
+# Windows Recon Attack Monitor
+# Basic version - monitors for common reconnaissance activities
 
-$HostSweepThreshold = 5
-$TimeWindowSeconds = 60
-$LoopSleepSeconds = 3
-$PktmonLimit = 1000
-$DebugMode = $false
+param(
+    [int]$MonitorDurationMinutes = 60,
+    [int]$PortScanThreshold = 10,
+    [int]$FailedLoginThreshold = 5,
+    [string]$LogFile = "C:\Temp\ReconMonitor.log"
+)
 
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Error "This script requires Administrator privileges. Rerun PowerShell as Admin."
-    exit 1
+# Function to write logs
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+    Write-Host $logEntry -ForegroundColor $(if($Level -eq "ALERT") {"Red"} elseif($Level -eq "WARN") {"Yellow"} else {"Green"})
+    Add-Content -Path $LogFile -Value $logEntry
 }
 
-$logDir = "C:\Logs"
-if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
-$reconCsv = Join-Path $logDir "recon_log.csv"
-if (-not (Test-Path $reconCsv)) { "Timestamp,SourceIP,TargetCount,Targets,Type,Details" | Out-File $reconCsv -Encoding utf8 }
-
-$protocolMap = @{
-    "TCP/502"  = "Modbus"; "TCP/20000" = "DNP3"; "UDP/20000" = "DNP3";
-    "UDP/47808"= "BACnet"; "TCP/44818" = "EtherNet/IP";
-    "TCP/102"  = "S7comm"; "UDP/102" = "S7comm"
-}
-$tcpAckPorts = @(80,443,21,22,23,25,135,139,445,3389)
-$extraPorts = ($protocolMap.Keys | ForEach-Object { ($_ -split "/")[1] } | Where-Object { $_ -match '^\d+$' }) + $tcpAckPorts
-$extraPorts = $extraPorts | Sort-Object -Unique
-
-function Log-Recon { param($srcIP, $targetCount, $targetList, $type, $details)
-    $ts = (Get-Date).ToString("o")
-    $row = @($ts, $srcIP, $targetCount, ($targetList -join ';'), $type, $details)
-    $row = $row | ForEach-Object { if ($_ -eq $null) { "" } else { ($_.ToString()).Replace('"','""') } }
-    '"' + ($row -join '","') + '"' | Out-File -FilePath $reconCsv -Append -Encoding utf8
-    if ($DebugMode) { Write-Host "LOGGED: $type from $srcIP -> $($targetList -join ',')" }
-}
-
-# prepare pktmon filters and start
-try { Stop-Process -Name pktmon -ErrorAction SilentlyContinue } catch {}
-$pktCfg = Join-Path $env:TEMP "pktmon_filters.txt"
-"reset" | Out-File $pktCfg -Encoding ascii
-"filter add 0 IP" | Out-File $pktCfg -Append -Encoding ascii
-"filter add 0 ICMP" | Out-File $pktCfg -Append -Encoding ascii
-foreach ($p in $extraPorts) { "filter add 0 TCP $p" | Out-File $pktCfg -Append -Encoding ascii; "filter add 0 UDP $p" | Out-File $pktCfg -Append -Encoding ascii }
-"start" | Out-File $pktCfg -Append -Encoding ascii
-try { Start-Process -FilePath "pktmon.exe" -ArgumentList "start" -NoNewWindow -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {}
-
-$pktSeen = [System.Collections.Generic.HashSet[string]]::new()
-$hostTracker = @{}
-
-function Parse-PktmonLive {
-    $out = @()
-    try {
-        $lines = & pktmon.exe list --live --limit $PktmonLimit 2>$null
-        foreach ($ln in $lines) {
-            if (-not $ln -or $ln.Trim().Length -lt 6) { continue }
-            $key = ($ln.GetHashCode().ToString() + ":" + $ln.Length)
-            if ($pktSeen.Contains($key)) { continue }
-            $pktSeen.Add($key) | Out-Null
-
-            $src="unknown"; $dst=""; $sport=""; $dport=""; $proto="UNK"; $flags=""
-
-            if ($ln -match '(?<s>(?:\d{1,3}\.){3}\d{1,3}):(?<sp>\d+)\s*->\s*(?<d>(?:\d{1,3}\.){3}\d{1,3}):(?<dp>\d+)') {
-                $src=$Matches['s']; $sport=$Matches['sp']; $dst=$Matches['d']; $dport=$Matches['dp']
-            } elseif ($ln -match '(?<d2>(?:\d{1,3}\.){3}\d{1,3}):(?<p2>\d+)\b') {
-                if (-not $dst) { $dst = $Matches['d2']; $dport = $Matches['p2'] }
-            } elseif ($ln -match '(?<s2>(?:\d{1,3}\.){3}\d{1,3})\s*->\s*(?<d3>(?:\d{1,3}\.){3}\d{1,3})') {
-                $src=$Matches['s2']; $dst=$Matches['d3']
-            } elseif ($ln -match '(?<ip>(?:\d{1,3}\.){3}\d{1,3})') {
-                if (-not $dst) { $dst = $Matches['ip'] }
-            }
-
-            if ($ln -match '\bTCP\b') { $proto='TCP' } elseif ($ln -match '\bUDP\b') { $proto='UDP' } elseif ($ln -match '\bICMP\b') { $proto='ICMP' }
-            if ($ln -match '\bACK\b') { $flags += 'ACK,' }
-            if ($ln -match '\bSYN\b') { $flags += 'SYN,' }
-            if ($ln -match '\bRST\b') { $flags += 'RST,' }
-            if ($flags.EndsWith(',')) { $flags = $flags.TrimEnd(',') }
-
-            $out += [PSCustomObject]@{ Src=$src; Dst=$dst; Proto=$proto; Sport=$sport; Dport=$dport; Flags=$flags; Details=$ln }
+# Function to monitor failed login attempts
+function Monitor-FailedLogins {
+    Write-Log "Monitoring failed login attempts..."
+    
+    $startTime = (Get-Date).AddMinutes(-5)
+    $events = Get-WinEvent -FilterHashtable @{
+        LogName = 'Security'
+        ID = 4625  # Failed logon
+        StartTime = $startTime
+    } -ErrorAction SilentlyContinue
+    
+    if ($events) {
+        $failedLogins = $events | Group-Object {$_.Properties[19].Value} | 
+                       Where-Object {$_.Count -ge $FailedLoginThreshold}
+        
+        foreach ($login in $failedLogins) {
+            $sourceIP = $login.Name
+            $attempts = $login.Count
+            Write-Log "POTENTIAL BRUTE FORCE: $attempts failed login attempts from $sourceIP" "ALERT"
         }
-    } catch {}
-    return $out
-}
-
-Write-Host "Starting recon detection. Log: $reconCsv"
-try {
-    while ($true) {
-        $pktEvents = Parse-PktmonLive
-        foreach ($p in $pktEvents) {
-            $src = $p.Src
-            if (-not $src) { $src = "unknown" }
-            if (-not $hostTracker.ContainsKey($src)) {
-                $hostTracker[$src] = @{ Targets = @(); FirstSeen = (Get-Date); Ports = @(); AckCount = 0 }
-            }
-            if ($p.Dst -and ($hostTracker[$src].Targets -notcontains $p.Dst)) { $hostTracker[$src].Targets += $p.Dst }
-            if ($p.Dport -and ($p.Dport -ne "") -and ($hostTracker[$src].Ports -notcontains $p.Dport)) { $hostTracker[$src].Ports += $p.Dport }
-
-            if ($p.Proto -eq "TCP" -and ($p.Flags -match 'ACK' -or ($p.Dport -ne "" -and ($p.Dport -in $tcpAckPorts)))) { $hostTracker[$src].AckCount += 1 }
-
-            $targetsCount = $hostTracker[$src].Targets.Count
-            $ackCount = $hostTracker[$src].AckCount
-
-            if ($targetsCount -ge $HostSweepThreshold -or $ackCount -ge $HostSweepThreshold) {
-                if ($ackCount -ge $HostSweepThreshold) { $type = "TCP ACK Sweep" }
-                elseif ($p.Proto -eq "ICMP") { $type = "ICMP Sweep" }
-                else { $type = "OT Protocol Sweep" }
-                $details = "Flags:$($p.Flags) Ports:$(($hostTracker[$src].Ports) -join ',')"
-                Log-Recon $src $targetsCount $hostTracker[$src].Targets $type $details
-                $hostTracker.Remove($src)
-            }
-        }
-
-        foreach ($srcKey in ($hostTracker.Keys | ForEach-Object { $_ })) {
-            $age = (Get-Date) - $hostTracker[$srcKey].FirstSeen
-            if ($age.TotalSeconds -gt $TimeWindowSeconds) { $hostTracker.Remove($srcKey) }
-        }
-
-        Start-Sleep -Seconds $LoopSleepSeconds
     }
-} finally {
-    try { Start-Process -FilePath "pktmon.exe" -ArgumentList "stop" -NoNewWindow -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {}
 }
+
+# Function to monitor network connections for suspicious activity
+function Monitor-NetworkConnections {
+    Write-Log "Monitoring network connections..."
+    
+    $connections = Get-NetTCPConnection -State Listen
+    $suspiciousPorts = @()
+    
+    # Check for uncommon listening ports
+    $commonPorts = @(80, 443, 135, 139, 445, 3389, 5985, 5986)
+    
+    foreach ($conn in $connections) {
+        if ($conn.LocalPort -notin $commonPorts -and $conn.LocalPort -lt 1024) {
+            $suspiciousPorts += $conn.LocalPort
+        }
+    }
+    
+    if ($suspiciousPorts.Count -gt 0) {
+        Write-Log "SUSPICIOUS LISTENING PORTS detected: $($suspiciousPorts -join ', ')" "WARN"
+    }
+    
+    # Monitor for multiple connections from same external IP
+    $externalConnections = Get-NetTCPConnection -State Established | 
+                          Where-Object {$_.RemoteAddress -notmatch "^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)"} |
+                          Group-Object RemoteAddress | 
+                          Where-Object {$_.Count -ge $PortScanThreshold}
+    
+    foreach ($conn in $externalConnections) {
+        $remoteIP = $conn.Name
+        $connectionCount = $conn.Count
+        Write-Log "POTENTIAL PORT SCAN: $connectionCount connections from external IP $remoteIP" "ALERT"
+    }
+}
+
+# Function to monitor for reconnaissance tools
+function Monitor-ReconProcesses {
+    Write-Log "Monitoring for reconnaissance tools..."
+    
+    $reconTools = @("nmap", "masscan", "zmap", "nessus", "openvas", "nikto", "dirb", "gobuster", "wfuzz")
+    $runningProcesses = Get-Process | Select-Object -ExpandProperty ProcessName
+    
+    foreach ($tool in $reconTools) {
+        if ($runningProcesses -contains $tool) {
+            Write-Log "RECON TOOL DETECTED: $tool is running on the system" "ALERT"
+        }
+    }
+}
+
+# Function to monitor Windows Event Logs for suspicious activities
+function Monitor-SecurityEvents {
+    Write-Log "Monitoring security events..."
+    
+    $startTime = (Get-Date).AddMinutes(-5)
+    
+    # Monitor for account enumeration (Event ID 4798)
+    $enumEvents = Get-WinEvent -FilterHashtable @{
+        LogName = 'Security'
+        ID = 4798
+        StartTime = $startTime
+    } -ErrorAction SilentlyContinue
+    
+    if ($enumEvents -and $enumEvents.Count -ge 5) {
+        Write-Log "ACCOUNT ENUMERATION: Multiple account enumeration attempts detected ($($enumEvents.Count) events)" "ALERT"
+    }
+    
+    # Monitor for privilege escalation attempts (Event ID 4672)
+    $privEvents = Get-WinEvent -FilterHashtable @{
+        LogName = 'Security'
+        ID = 4672
+        StartTime = $startTime
+    } -ErrorAction SilentlyContinue
+    
+    if ($privEvents) {
+        $suspiciousPriv = $privEvents | Group-Object {$_.Properties[1].Value} |
+                         Where-Object {$_.Count -ge 3}
+        
+        foreach ($priv in $suspiciousPriv) {
+            $account = $priv.Name
+            $attempts = $priv.Count
+            Write-Log "PRIVILEGE ESCALATION: Multiple privilege use attempts by $account ($attempts times)" "WARN"
+        }
+    }
+}
+
+# Main monitoring loop
+Write-Log "Starting Windows Recon Attack Monitor"
+Write-Log "Monitor Duration: $MonitorDurationMinutes minutes"
+Write-Log "Port Scan Threshold: $PortScanThreshold connections"
+Write-Log "Failed Login Threshold: $FailedLoginThreshold attempts"
+Write-Log "Log File: $LogFile"
+
+$endTime = (Get-Date).AddMinutes($MonitorDurationMinutes)
+
+try {
+    while ((Get-Date) -lt $endTime) {
+        Write-Log "Running monitoring cycle..."
+        
+        # Run all monitoring functions
+        Monitor-FailedLogins
+        Monitor-NetworkConnections
+        Monitor-ReconProcesses
+        Monitor-SecurityEvents
+        
+        Write-Log "Monitoring cycle complete. Waiting 30 seconds..."
+        Start-Sleep -Seconds 30
+    }
+}
+catch {
+    Write-Log "Error occurred: $($_.Exception.Message)" "ERROR"
+}
+finally {
+    Write-Log "Windows Recon Attack Monitor stopped"
+}
+
+Write-Host "`nMonitoring completed. Check log file at: $LogFile" -ForegroundColor Cyan
