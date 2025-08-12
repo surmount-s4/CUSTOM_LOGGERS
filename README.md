@@ -1,3 +1,188 @@
+# CUSTOM_LOGGERS – Unified Monitoring Suite
+
+> Centralized PowerShell-based detection framework mapping Windows & Sysmon telemetry to MITRE ATT&CK tactics on Windows Server 2012+ (PowerShell 3.0 compatible).
+
+---
+
+## 1. Project Overview
+The suite provides modular monitors per ATT&CK tactic (Execution, Persistence, Credential Access, Discovery, Lateral Movement, Command & Control, Impact, Initial Access, Defense Evasion, etc.). Each script:
+- Uses a lightweight polling loop (or legacy WMI/event queries) with sliding time window.
+- Consumes Sysmon Operational log plus selected Security/System events.
+- Outputs human-readable, technique-tagged flat log files suitable for SIEM ingestion.
+
+---
+
+## 2. Standard Logging Architecture (Reference Pattern)
+Adopted in fully compliant monitors (e.g., DefenseEvasion.ps1, CredentialAccess.ps1, Discovery.ps1, LateralMovement.ps1, Execution.ps1, InitialAccess.ps1, Persistence.ps1 after modernization):
+- Parameters: `-OutputPath -LogLevel (Info|Warning|Critical) -MonitorDuration (minutes, 0=continuous) -RefreshInterval (seconds)`
+- Initialization:
+  - Creates timestamped log: `<Tactic>_yyyyMMdd_HHmmss.log`
+  - Records environment header (time, PSVersion, OS).
+- Core function: `Write-LogEntry` builds line:
+  ```
+  [YYYY-MM-DD HH:MM:SS] [LEVEL] Message | EventID: n | Process: image | PID: id | User: DOMAIN\user | CommandLine: ... | Technique: T####(.###) | Additional: context
+  ```
+  Optional fields appended only if present (ProcessGuid, Hashes, TargetFile, etc.).
+- Event acquisition: `Get-WinEvent -FilterHashtable @{ LogName=<name>; Id=<id array>; StartTime=<LastEventTime minus buffer> }`
+- Sliding window: `$Script:LastEventTime` updated after each cycle to prevent reprocessing.
+- Technique counters: Hashtable keyed by Technique → incremented in `Write-LogEntry`.
+- Summary: Printed/logged on graceful stop or duration expiry (totals + per-technique counts).
+- Graceful termination: Ctrl+C handler / `PowerShell.Exiting` event writes summary.
+- Compatibility: No PowerShell 5+ specific syntax (avoids `??`, pipeline classes, etc.).
+
+---
+
+## 3. Architecture Status Categories
+| Status | Meaning |
+|--------|---------|
+| Fully Compliant | Implements standard parameter set, `Write-LogEntry`, counters, summary, sliding window polling. |
+| Partially Compliant | Functional detections but deviates (naming, missing levels, reduced parameters, older logging). |
+| Utility | Support / infrastructure (setup, validation, raw logging helpers). |
+| Legacy / Refactor | Older pattern (baseline diff only, or broad snapshot logic) – slated for modernization or deprecation. |
+
+---
+
+## 4. Script Inventory (Current State)
+| Script | Primary Tactic(s) | Purpose / Focus | Log Filename Pattern | Architecture Status | Sysmon Required (Full Value) |
+|--------|-------------------|-----------------|----------------------|--------------------|------------------------------|
+| DefenseEvasion.ps1 | Defense Evasion | Hides/injection, tamper & evasion behaviors | DefenseEvasion_*.log | Fully Compliant | Yes (falls back limited) |
+| CredentialAccess.ps1 | Credential Access | LSASS access, dumping, Kerberos, token abuse | CredentialAccess_*.log | Fully Compliant | Yes |
+| Discovery.ps1 | Discovery | Enumeration (accounts, system, network, shares) | Discovery_*.log | Fully Compliant | Yes |
+| LateralMovement.ps1 | Lateral Movement | RDP sessions, admin share, tool transfer | LateralMovement_*.log | Fully Compliant | Yes |
+| Execution.ps1 | Execution | Command/script interpreters, LOLBins, user execution | Execution_*.log | Fully Compliant | Yes |
+| InitialAccess.ps1 | Initial Access | Phishing chains, drive‑by, dropped payloads, external RDP | InitialAccess_*.log | Fully Compliant | Yes |
+| Persistence.ps1 | Persistence | Registry/services/tasks/WMI persistence | Persistence_*.log | Fully Compliant | Yes |
+| Persistence_old.ps1 | Persistence | Baseline diff (registry, tasks, WMI, files) | Execution-Detect.log / baseline set | Legacy / Refactor | Beneficial |
+| CommandAndControl.ps1 | Command & Control | Protocol misuse, tunneling, DNS, RAT indicators | CommandAndControl_*.log | Partially Compliant (simplified logger, no LogLevel param) | Yes |
+| Impact.ps1 | Impact | Destructive / disruptive OT targets (ransomware, wipe) | Impact_*.log | Fully Compliant | Yes |
+| Validate-SysmonSetup.ps1 | Infrastructure | Validate Sysmon install, config, events | (console summary) | Utility | Yes |
+| Setup-SysmonPipeline.ps1 | Infrastructure | Deploy/update Sysmon config | sysmon-setup.log | Utility | Yes |
+| Test-SysmonDetection.ps1 | Test | Generates sample events | Test log / console | Utility | Yes |
+| Test-*Detection.ps1 (various) | Test | Scenario validation per tactic | Test_*_*.log | Utility | Yes |
+| PrivlegeEscalation.ps1 (typo) | Privilege Escalation | Token, service, registry abuse (needs rename) | PrivilegeEscalation_*.log | Partially Compliant | Yes |
+| Recon_full__scan.ps1 | Recon / Hybrid | Wide reconnaissance & honeypot hooks | recon_log.txt | Legacy / Specialized | Partial |
+| Reconnaissance_full__scan.ps1 | Recon / Duplicate | Duplicate variant | recon_log.txt | Legacy / Duplicate | Partial |
+| recon-detect.ps1 | Recon | Lightweight recon detection | recon_log.txt | Legacy | Optional |
+| ps_cmd_logs.ps1 | Utility | PowerShell script block logging aggregator | ps_cmd_logs.log | Utility | Optional |
+| cmdline_logger.ps1 | Utility | Command line capture (process start) | cmdline_logger.log | Utility | Optional |
+| COMPLIANCE-ANALYSIS-REPORT.md | Documentation | Architecture alignment assessment | (markdown) | Doc | N/A |
+| *README tactic files* | Documentation | Deep dive per tactic | (markdown) | Doc | N/A |
+
+---
+
+## 5. Core Event Sources
+| Category | Examples |
+|----------|----------|
+| Sysmon | 1 (Process), 3 (Network), 7 (ImageLoad), 8 (CreateRemoteThread), 10 (ProcessAccess), 11 (FileCreate), 12/13/14 (Registry), 19–21 (WMI), 22 (DNS), 23 (FileDelete) |
+| Security Log | 4624/4625 (Logon), 4648, 4672/4673, 4688 (Process), 4697 (Service Installed), 4698/4702 (Scheduled Task), 7045 (System service via System log), 4768/4769/4771 (Kerberos), 4778/4779 (RDP session) |
+| System | 7045 (Service install) |
+| PowerShell (when enabled) | 4104 Script Block (external in utility scripts) |
+
+---
+
+## 6. Common Parameters & Behavior
+| Parameter | Meaning | Notes |
+|-----------|---------|-------|
+| OutputPath | Directory for log files | Defaults to ProgramData\CustomSecurityLogs\CUSTOM_LOGGERS |
+| LogLevel | Minimum console emission | File always receives full detail |
+| MonitorDuration | Minutes (0 = run until interrupted) | Loop stops gracefully & summarizes |
+| RefreshInterval | Polling cadence (seconds) | Small values increase CPU/IO |
+
+Scripts without LogLevel or full parity (e.g., CommandAndControl.ps1) are candidates for standardization.
+
+---
+
+## 7. Log Consumption & SIEM Tips
+- Stable delimiter: pipe characters (`| Field: Value`) allow straightforward splitting.
+- Technique tagging enables ATT&CK dimension pivoting (group by Technique).
+- Recommended ingestion fields: Timestamp, Level, Technique, Process, PID, User, EventID, CommandLine hash (for dedup), Additional.
+- Implement downstream dictionary for technique → tactic mapping (if not already enriched).
+
+---
+
+## 8. Extension Guidelines
+When adding a new tactic script:
+1. Copy a fully compliant template (e.g., CredentialAccess.ps1).
+2. Replace tactic name, log prefix, detection functions.
+3. Define `Monitor-<TechniqueGroup>` functions encapsulating pattern logic.
+4. Restrict filters to needed Event IDs (performance).
+5. Append MITRE technique IDs exactly (T#### with optional sub-tech .###).
+6. Maintain backward compatibility (avoid unsupported syntax).
+
+---
+
+## 9. Modernization Targets
+| Item | Action |
+|------|--------|
+| CommandAndControl.ps1 | Add LogLevel + severity classifications + summary block |
+| Persistence_old.ps1 | Migrate to real-time model or archive as legacy |
+| Recon* scripts | Consolidate into Discovery.ps1 (optional modular plugin approach) |
+| PrivlegeEscalation.ps1 | Rename (PrivilegeEscalation.ps1) & refactor to standard logger |
+| Utilities | Document separation from primary tactical monitors |
+
+---
+
+## 10. Quick Start
+```powershell
+# Validate Sysmon
+.\Validate-SysmonSetup.ps1
+
+# Launch several tactic monitors concurrently (separate consoles)
+.\Execution.ps1 -LogLevel Info
+.\CredentialAccess.ps1 -LogLevel Warning -RefreshInterval 20
+.\LateralMovement.ps1 -MonitorDuration 120 -RefreshInterval 15
+```
+
+Stop with Ctrl+C → summary printed + counters recorded.
+
+---
+
+## 11. First-Time Checklist
+- [ ] Sysmon installed & Operational log populated
+- [ ] Security log auditing (process creation, logon events) enabled
+- [ ] PowerShell script block logging (optional enrichment) configured
+- [ ] Output directory write permissions verified
+- [ ] Baseline noise reviewed (adjust LogLevel or patterns)
+
+---
+
+## 12. Roadmap Ideas
+- JSON dual-output mode (file + structured)
+- Central aggregator (merge multi-tactic events + correlation)
+- Whitelist/allowlist configuration file (regex-based suppression)
+- Optional module-based packaging / manifest
+- Live metrics endpoint (e.g., named pipe or lightweight HTTP listener)
+- Unified orchestrator to manage all tactic monitors
+
+---
+
+## 13. Support / Troubleshooting
+| Symptom | Likely Cause | Action |
+|---------|--------------|-------|
+| Empty logs | Missing Sysmon events | Verify configuration / service state |
+| High CPU | Too small RefreshInterval | Increase interval (≥15s) |
+| Duplicate detections | LastEventTime not advancing | Ensure system clock stable / no manual time shifts |
+| Missing Technique counters | Technique not passed to logger | Confirm detection functions supply `-Technique` |
+| Noise overload | Broad patterns (e.g., discovery) | Raise LogLevel or refine regex lists |
+
+---
+
+## 14. Compliance Snapshot (Condensed)
+Fully Compliant: DefenseEvasion, CredentialAccess, Discovery, LateralMovement, Execution, InitialAccess, Persistence, Impact  
+Partially: CommandAndControl, PrivlegeEscalation  
+Legacy / Refactor: Persistence_old, Recon_full__scan, Reconnaissance_full__scan, recon-detect  
+Utilities: Setup-SysmonPipeline, Validate-SysmonSetup, ps_cmd_logs, cmdline_logger, test scripts  
+Documentation: Individual tactic READMEs & Compliance Report  
+
+---
+
+## 15. Licensing / Security Note
+Logs may contain sensitive command lines & user context; treat as confidential security telemetry. Implement retention & access controls.
+
+---
+
+(Original tactic-specific functionality sections retained below)
+
 # CUSTOM_LOGGERS
 Loggers made for monitoring and logging signatures corresponding to Mitre Attack Tactics 
 
