@@ -74,6 +74,7 @@ Write-Host "Starting recon detection. Log: $reconCsv"
 
 try {
     while ($true) {
+        Write-Host "new loop"
         $pktEvents = Parse-PktmonLive
         foreach ($p in $pktEvents) {
             $src = $p.Src
