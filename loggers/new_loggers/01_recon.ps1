@@ -5,13 +5,13 @@ param(
     [int]$MonitorDurationMinutes = 60,
     [int]$PortScanThreshold = 10,
     [int]$FailedLoginThreshold = 5,
-    [string]$LogFile = "C:\Temp\ReconMonitor.log"
+    [string]$LogFile = "C:\Logs\ReconMonitor.log"
 )
 
 # Function to write logs
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $timestamp = Get-Date -Format "o"
     $logEntry = "[$timestamp] [$Level] $Message"
     Write-Host $logEntry -ForegroundColor $(if($Level -eq "ALERT") {"Red"} elseif($Level -eq "WARN") {"Yellow"} else {"Green"})
     Add-Content -Path $LogFile -Value $logEntry
