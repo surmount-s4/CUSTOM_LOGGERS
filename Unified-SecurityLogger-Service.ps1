@@ -72,6 +72,40 @@ $Global:CSVHeaders = @{
 }
 
 # ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+function ConvertTo-CSVSafeString {
+    param([string]$InputString)
+    
+    if ([string]::IsNullOrEmpty($InputString)) {
+        return ""
+    }
+    
+    # Replace newlines and carriage returns with spaces
+    $safeString = $InputString -replace "`r`n", " " -replace "`n", " " -replace "`r", " "
+    
+    # Replace tabs with spaces
+    $safeString = $safeString -replace "`t", " "
+    
+    # Collapse multiple spaces into single space
+    $safeString = $safeString -replace "\s+", " "
+    
+    # Trim whitespace
+    $safeString = $safeString.Trim()
+    
+    # Escape quotes for CSV
+    $safeString = $safeString -replace '"', '""'
+    
+    # Limit length to prevent excessive log size (optional - adjust as needed)
+    if ($safeString.Length -gt 2000) {
+        $safeString = $safeString.Substring(0, 2000) + "..."
+    }
+    
+    return $safeString
+}
+
+# ============================================================================
 # SERVICE MANAGEMENT FUNCTIONS
 # ============================================================================
 
@@ -167,24 +201,22 @@ function Write-SecurityEvent {
         
         [switch]$SkipDeduplication
     )
-    
+
     try {
         # Event Deduplication with null value protection
         if (-not $SkipDeduplication) {
-            # Safe event hash generation - handle null values
             $mitreTechnique = if ($EventData.MitreTechnique) { $EventData.MitreTechnique } else { "UNKNOWN" }
             $processID = if ($EventData.ProcessID) { $EventData.ProcessID } else { "0" }
             $eventDetails = if ($EventData.EventDetails) { $EventData.EventDetails } else { "NO_DETAILS" }
-            
+
             $eventHash = "$mitreTechnique-$processID-$eventDetails"
             $currentTime = Get-Date
-            
-            # Ensure hash is not null or empty
+
             if ([string]::IsNullOrWhiteSpace($eventHash)) {
                 $eventHash = "UNKNOWN-$(Get-Random)-$currentTime"
             }
-            
-            # Clean old entries from cache
+
+            # Clean expired entries from cache
             $expiredKeys = @()
             foreach ($key in $Global:EventDeduplicationCache.Keys) {
                 if (($currentTime - $Global:EventDeduplicationCache[$key]).TotalSeconds -gt $Global:DeduplicationWindow) {
@@ -194,38 +226,52 @@ function Write-SecurityEvent {
             foreach ($key in $expiredKeys) {
                 $Global:EventDeduplicationCache.Remove($key)
             }
-            
+
             # Check if event is duplicate
             if ($Global:EventDeduplicationCache.ContainsKey($eventHash)) {
-                return  # Skip duplicate event
+                return
             }
-            
+
             # Add to cache
             if ($Global:EventDeduplicationCache.Count -lt $Global:MaxCacheSize) {
                 $Global:EventDeduplicationCache[$eventHash] = $currentTime
             }
         }
-        
+
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-        
+
         # Build CSV row based on log type
         $csvRow = switch ($LogType) {
             'Main' {
-                "$timestamp," +
-                "$($EventData.Severity)," +
-                "$($EventData.MitreTechnique)," +
-                "$($EventData.DetectionModule)," +
-                "`"$($EventData.EventDetails -replace '"', '""')`"," +
-                "$($EventData.ProcessID)," +
-                "`"$($EventData.ProcessName -replace '"', '""')`"," +
-                "`"$($EventData.CommandLine -replace '"', '""')`"," +
-                "$($EventData.User)," +
-                "$($EventData.SourceIP)," +
-                "$($EventData.DestIP)," +
-                "`"$($EventData.FilePath -replace '"', '""')`"," +
-                "`"$($EventData.RegistryKey -replace '"', '""')`"," +
-                "`"$($EventData.AdditionalContext -replace '"', '""')`""
+                $commandLine = if (
+                    ($EventData.CommandLine -match '(?i)python\.exe') -or 
+                    ($EventData.CommandLine -match '(?s)def\s|import\s|class\s|print\(')
+                ) {
+                    ''
+                } else {
+                    $EventData.CommandLine -replace '"', '""'
+                }
+
+                $row = @(
+                    $timestamp
+                    $EventData.Severity
+                    $EventData.MitreTechnique
+                    $EventData.DetectionModule
+                    '"' + ($EventData.EventDetails -replace '"', '""') + '"'
+                    $EventData.ProcessID
+                    '"' + ($EventData.ProcessName -replace '"', '""') + '"'
+                    '"' + $commandLine + '"'
+                    $EventData.User
+                    $EventData.SourceIP
+                    $EventData.DestIP
+                    '"' + ($EventData.FilePath -replace '"', '""') + '"'
+                    '"' + ($EventData.RegistryKey -replace '"', '""') + '"'
+                    '"' + ($EventData.AdditionalContext -replace '"', '""') + '"'
+                )
+
+                $row -join ","
             }
+
             'Correlation' {
                 "$timestamp," +
                 "$($EventData.CorrelationType)," +
@@ -236,6 +282,7 @@ function Write-SecurityEvent {
                 "$($EventData.RiskScore)," +
                 "$($EventData.KillChainPhase)"
             }
+
             'USB' {
                 "$timestamp," +
                 "$($EventData.Severity)," +
@@ -248,6 +295,7 @@ function Write-SecurityEvent {
                 "$($EventData.User)," +
                 "`"$($EventData.AdditionalInfo -replace '"', '""')`""
             }
+
             'OT' {
                 "$timestamp," +
                 "$($EventData.Severity)," +
@@ -260,6 +308,7 @@ function Write-SecurityEvent {
                 "$($EventData.OTRiskLevel)," +
                 "`"$($EventData.AdditionalContext -replace '"', '""')`""
             }
+
             'Service' {
                 "$timestamp," +
                 "$($EventData.Component)," +
@@ -270,6 +319,7 @@ function Write-SecurityEvent {
                 "$($EventData.ErrorCount)," +
                 "`"$($EventData.AdditionalInfo -replace '"', '""')`""
             }
+
             'Error' {
                 "$timestamp," +
                 "$($EventData.Module)," +
@@ -278,16 +328,20 @@ function Write-SecurityEvent {
                 "`"$($EventData.StackTrace -replace '"', '""')`"," +
                 "$($EventData.RecoveryAction)"
             }
+
+            default {
+                throw "Unknown log type: $LogType"
+            }
         }
-        
+
         # Write to file
         $logFile = $Global:LogWriters[$LogType].Path
         $csvRow | Out-File -FilePath $logFile -Append -Encoding UTF8
-        
+
         # Update statistics
         $Global:LogWriters[$LogType].EventCount++
         $Global:LogWriters[$LogType].LastWrite = Get-Date
-        
+
         # Check for log rotation
         if ((Get-Item $logFile).Length -gt $Global:ServiceConfig.MaxLogSize) {
             Invoke-LogRotation -LogType $LogType
