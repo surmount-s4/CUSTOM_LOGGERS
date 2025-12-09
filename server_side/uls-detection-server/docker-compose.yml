@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: uls-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: uls_detection
+      POSTGRES_USER: uls_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password_here}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      # Persistent data storage
+      - timescaledb_data:/var/lib/postgresql/data
+      # Optional: Custom PostgreSQL configuration
+      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # Optional: Initialization scripts
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - uls-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uls_user -d uls_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: uls-rabbitmq
+    restart: unless-stopped
+    hostname: uls-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-uls_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-your_rabbitmq_password}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      # Persistent data storage
+      - rabbitmq_data:/var/lib/rabbitmq
+      # Optional: Custom RabbitMQ configuration
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    networks:
+      - uls-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  timescaledb_data:
+    driver: local
+    name: uls_timescaledb_data
+  rabbitmq_data:
+    driver: local
+    name: uls_rabbitmq_data
+
+networks:
+  uls-network:
+    driver: bridge
+    name: uls-network
