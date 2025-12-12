@@ -7,22 +7,18 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: uls_detection
-      POSTGRES_USER: uls_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password_here}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
       POSTGRES_INITDB_ARGS: "-E UTF8"
     volumes:
       # Persistent data storage
       - timescaledb_data:/var/lib/postgresql/data
-      # Optional: Custom PostgreSQL configuration
-      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      # Optional: Initialization scripts
-      - ./init-scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     networks:
       - uls-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U uls_user -d uls_detection"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d uls_detection"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,14 +37,12 @@ services:
     restart: unless-stopped
     hostname: uls-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-uls_admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-your_rabbitmq_password}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
       RABBITMQ_DEFAULT_VHOST: /
     volumes:
       # Persistent data storage
       - rabbitmq_data:/var/lib/rabbitmq
-      # Optional: Custom RabbitMQ configuration
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
       - "5672:5672"   # AMQP port
       - "15672:15672" # Management UI

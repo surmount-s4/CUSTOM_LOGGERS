@@ -5,10 +5,10 @@
 # Parameters:
 param(
     [int]$InitialDaysBack = 0,
-    [string]$RabbitMQHost = "172.16.0.144",
+    [string]$RabbitMQHost = "172.16.0.114",
     [int]$RabbitMQPort = 5672,
-    [string]$RabbitMQUser = "guest",
-    [string]$RabbitMQPassword = "guest",
+    [string]$RabbitMQUser = "admin",
+    [string]$RabbitMQPassword = "admin",
     [string]$RabbitMQQueue = "security_events",
     [string]$RabbitMQVHost = "/",
     [string[]]$LogSources = @(
@@ -63,7 +63,7 @@ try {
 # HTTP API fallback function
 function Send-ToRabbitMQHttp {
     param(
-        [string]$Host,
+        [string]$HostName,
         [int]$Port,
         [string]$User,
         [string]$Password,
@@ -74,13 +74,20 @@ function Send-ToRabbitMQHttp {
     
     $httpPort = 15672  # RabbitMQ Management HTTP API port
     $encodedVHost = [System.Web.HttpUtility]::UrlEncode($VHost)
-    $uri = "http://$Host`:$httpPort/api/exchanges/$encodedVHost/amq.default/publish"
+    $uri = "http://$HostName`:$httpPort/api/exchanges/$encodedVHost/amq.default/publish"
+    
+    # Payload must be base64-encoded for RabbitMQ HTTP API
+    $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($Message)
+    $payloadBase64 = [Convert]::ToBase64String($payloadBytes)
     
     $body = @{
-        properties = @{}
+        properties = @{
+            delivery_mode = 2
+            content_type = "application/json"
+        }
         routing_key = $Queue
-        payload = $Message
-        payload_encoding = "string"
+        payload = $payloadBase64
+        payload_encoding = "base64"
     } | ConvertTo-Json -Depth 10
     
     $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$User`:$Password"))
@@ -145,7 +152,7 @@ function Send-EventsToRabbitMQ {
             return $false
         }
     } else {
-        return Send-ToRabbitMQHttp -Host $RabbitMQHost -Port $RabbitMQPort -User $RabbitMQUser `
+        return Send-ToRabbitMQHttp -HostName $RabbitMQHost -Port $RabbitMQPort -User $RabbitMQUser `
             -Password $RabbitMQPassword -VHost $RabbitMQVHost -Queue $RabbitMQQueue -Message $jsonPayload
     }
 }

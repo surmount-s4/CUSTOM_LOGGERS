@@ -1679,23 +1679,31 @@ func (d *Detector) detectExfiltrationAdditional(event *models.SecurityEvent) mod
 
 	// T1020 - Automated Exfiltration
 	if matchesPattern(cmdLine, `schtasks.*create.*daily|powershell.*-windowstyle.*hidden.*invoke-webrequest|curl.*-o.*--data-binary|wget.*--post-file|robocopy.*\\\\.*\/E`) {
+		context := "Scheduled data transmission detected"
+		if destIP != "" {
+			context += " to " + destIP
+		}
 		return models.DetectionResult{
 			Severity:        "HIGH",
 			MitreTechnique:  "T1020",
 			DetectionModule: "Exfiltration",
 			EventDetails:    "Automated exfiltration activity",
-			AdditionalContext: "Scheduled data transmission detected",
+			AdditionalContext: context,
 		}
 	}
 
 	// T1041 - Exfiltration Over C2 Channel
 	if matchesPattern(cmdLine, `invoke-webrequest.*-method.*post.*-body|curl.*-X.*POST.*--data|certutil.*-urlcache.*-split.*-f.*http`) {
+		context := "Data transmission over C2"
+		if destIP != "" {
+			context += " to " + destIP
+		}
 		return models.DetectionResult{
 			Severity:        "CRITICAL",
 			MitreTechnique:  "T1041",
 			DetectionModule: "Exfiltration",
 			EventDetails:    "C2 exfiltration channel detected",
-			AdditionalContext: "Data transmission over C2",
+			AdditionalContext: context,
 		}
 	}
 
@@ -1985,23 +1993,33 @@ func (d *Detector) detectInitialAccessAdditional(event *models.SecurityEvent) mo
 
 	// T1189 - Drive-by Compromise
 	if matchesPattern(cmdLine, `download.*javascript|drive.*by|compromised.*website`) {
+		context := "Compromised website infection"
+		// Check if spawned from browser (common for drive-by)
+		if strings.Contains(parentImage, "chrome") || strings.Contains(parentImage, "firefox") || 
+		   strings.Contains(parentImage, "iexplore") || strings.Contains(parentImage, "msedge") {
+			context += " spawned from browser: " + parentImage
+		}
 		return models.DetectionResult{
 			Severity:        "HIGH",
 			MitreTechnique:  "T1189",
 			DetectionModule: "InitialAccess",
 			EventDetails:    "Drive-by compromise detected",
-			AdditionalContext: "Compromised website infection",
+			AdditionalContext: context,
 		}
 	}
 
 	// T1190 - Exploit Public-Facing Application
 	if matchesPattern(cmdLine, `exploit.*application|web.*vulnerability|cve-.*web`) {
+		context := "Web application vulnerability exploitation"
+		if parentImage != "" {
+			context += " from parent: " + parentImage
+		}
 		return models.DetectionResult{
 			Severity:        "HIGH",
 			MitreTechnique:  "T1190",
 			DetectionModule: "InitialAccess",
 			EventDetails:    "Public-facing app exploitation",
-			AdditionalContext: "Web application vulnerability exploitation",
+			AdditionalContext: context,
 		}
 	}
 
